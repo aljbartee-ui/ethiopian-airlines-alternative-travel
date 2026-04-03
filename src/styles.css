@@ -1,0 +1,114 @@
+:root {
+  --et-green: #5e8f4d;
+  --et-red: #c52528;
+  --et-yellow: #ffc92d;
+  --bg-dark: #111217;
+  --bg-card: #181a20;
+  --text-main: #f5f5f5;
+  --text-muted: #a0a0a0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+}
+
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  padding: 12px 20px;
+  background: linear-gradient(90deg, var(--et-green), var(--et-yellow), var(--et-red));
+  color: #111;
+  font-weight: 600;
+}
+
+.header-title {
+  font-size: 18px;
+}
+
+.main {
+  flex: 1;
+  padding: 16px;
+}
+
+.card {
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.button {
+  background-color: var(--et-green);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.button.secondary {
+  background-color: var(--et-red);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0 10px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background-color: #101218;
+  color: var(--text-main);
+}
+
+.label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #333;
+  padding: 6px 8px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.badge.open {
+  background-color: rgba(94, 143, 77, 0.2);
+  color: var(--et-green);
+}
+
+.badge.closed {
+  background-color: rgba(197, 37, 40, 0.2);
+  color: var(--et-red);
+}

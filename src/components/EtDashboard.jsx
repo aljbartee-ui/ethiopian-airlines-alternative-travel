@@ -9,6 +9,8 @@ const EMPTY_FORM = {
   direction: 'OUTBOUND',
   et_flight_number: '',
   destination: '',
+  checkin_date: '',
+  checkin_time: '',
   requested_pax: '',
   requester_pnr: '',
   requester_ticket: '',
@@ -18,21 +20,11 @@ const EMPTY_FORM = {
 
 function statusBadge(s) {
   const map = {
-    OPEN: 'badge badge-open',
-    CLOSED: 'badge badge-closed',
+    OPEN:      'badge badge-open',
+    CLOSED:    'badge badge-closed',
     CONFIRMED: 'badge badge-confirmed',
   };
   return <span className={map[s] || 'badge badge-open'}>{s || 'OPEN'}</span>;
-}
-
-function transportBadge(s) {
-  const map = {
-    COLLECTING: 'badge badge-collecting',
-    CONFIRMED: 'badge badge-confirmed',
-    NOT_FEASIBLE: 'badge badge-feasible',
-    COMPLETED: 'badge badge-completed',
-  };
-  return s ? <span className={map[s] || 'badge badge-collecting'}>{s}</span> : <span style={{ color: 'var(--text-dim)' }}>—</span>;
 }
 
 export function EtDashboard() {
@@ -48,9 +40,7 @@ export function EtDashboard() {
     try {
       const data = await api('/api/trip-groups');
       setTripGroups(data);
-    } catch (e) {
-      console.error('Failed to load trip groups', e);
-    }
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -63,7 +53,7 @@ export function EtDashboard() {
   useSSE({
     'trip-groups-changed': handleLiveUpdate,
     'passengers-changed': handleLiveUpdate,
-    'transport-changed': handleLiveUpdate
+    'car-slots-changed': handleLiveUpdate
   });
 
   function handleChange(e) {
@@ -83,6 +73,8 @@ export function EtDashboard() {
           direction: form.direction,
           et_flight_number: form.et_flight_number || null,
           destination: form.destination || null,
+          checkin_date: form.checkin_date || null,
+          checkin_time: form.checkin_time || null,
           requested_pax: form.requested_pax ? Number(form.requested_pax) : null,
           requester_pnr: form.requester_pnr || null,
           requester_ticket: form.requester_ticket || null,
@@ -94,7 +86,7 @@ export function EtDashboard() {
       setForm(EMPTY_FORM);
       await load();
     } catch (err) {
-      setError(err.message || 'Failed to create trip group. Please try again.');
+      setError(err.message || 'Failed to create trip group.');
     } finally {
       setSaving(false);
     }
@@ -102,13 +94,13 @@ export function EtDashboard() {
 
   return (
     <div>
-      {/* Header card */}
+      {/* Header */}
       <div className="card">
         <div className="section-header">
           <div className="section-title">
             <div>
               <div className="card-title">Trip Groups</div>
-              <div className="card-subtitle">Manage Saudi transit coordination requests</div>
+              <div className="card-subtitle">Create and manage Saudi transit coordination requests</div>
             </div>
             <span className={`live-dot ${liveActive ? 'active' : ''}`}>
               <span className="live-dot-circle" />
@@ -123,8 +115,9 @@ export function EtDashboard() {
         {creating && (
           <form onSubmit={handleCreate}>
             <hr className="divider" />
-            <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Trip Details
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+              Flight Details
             </div>
             <div className="form-row">
               <div className="form-field">
@@ -149,7 +142,7 @@ export function EtDashboard() {
                 </select>
               </div>
               <div className="form-field">
-                <label className="label">ET Flight</label>
+                <label className="label">ET Flight No.</label>
                 <input className="input" name="et_flight_number" value={form.et_flight_number} onChange={handleChange} placeholder="e.g. ET308" />
               </div>
               <div className="form-field">
@@ -158,12 +151,26 @@ export function EtDashboard() {
               </div>
             </div>
 
-            <div style={{ marginBottom: 12, marginTop: 4, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+              Check-in Info
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="label">Check-in Date</label>
+                <input className="input" type="date" name="checkin_date" value={form.checkin_date} onChange={handleChange} />
+              </div>
+              <div className="form-field">
+                <label className="label">Check-in Time</label>
+                <input className="input" type="time" name="checkin_time" value={form.checkin_time} onChange={handleChange} />
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Requester Info
             </div>
             <div className="form-row">
               <div className="form-field" style={{ flex: '0 1 160px' }}>
-                <label className="label">Requested Pax Count</label>
+                <label className="label">Requested Pax</label>
                 <input className="input" type="number" min="1" name="requested_pax" value={form.requested_pax} onChange={handleChange} placeholder="e.g. 4" />
               </div>
               <div className="form-field">
@@ -185,23 +192,18 @@ export function EtDashboard() {
             </div>
 
             <label className="label">Demand Note (optional)</label>
-            <textarea className="textarea" name="demand_note" value={form.demand_note} onChange={handleChange} rows={2} placeholder="Any special requirements or notes…" />
+            <textarea className="textarea" name="demand_note" value={form.demand_note} onChange={handleChange} rows={2} placeholder="Any special requirements…" />
 
             {error && <div className="error-box">{error}</div>}
-
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="button" type="submit" disabled={saving}>
-                {saving ? 'Saving…' : '✓ Save Trip Group'}
-              </button>
-              <button type="button" className="button ghost" onClick={() => { setCreating(false); setError(''); }}>
-                Cancel
-              </button>
+              <button className="button" type="submit" disabled={saving}>{saving ? 'Saving…' : '✓ Save Trip Group'}</button>
+              <button type="button" className="button ghost" onClick={() => { setCreating(false); setError(''); }}>Cancel</button>
             </div>
           </form>
         )}
       </div>
 
-      {/* Trip groups table */}
+      {/* Table */}
       <div className="card">
         {tripGroups.length === 0 ? (
           <div className="empty-state">
@@ -214,23 +216,14 @@ export function EtDashboard() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>City</th>
-                  <th>Direction</th>
-                  <th>ET Flight</th>
-                  <th>Destination</th>
-                  <th>Req. Pax</th>
-                  <th>Confirmed Pax</th>
-                  <th>Transport</th>
-                  <th>Cost (KWD)</th>
-                  <th>Status</th>
-                  <th></th>
+                  <th>Date</th><th>City</th><th>Dir</th><th>Flight</th><th>Destination</th>
+                  <th>Check-in</th><th>Req.Pax</th><th>Booked</th><th>Vehicles</th><th>Status</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {tripGroups.map(tg => (
                   <tr key={tg.id}>
-                    <td style={{ fontWeight: 500 }}>{tg.transit_date?.slice(0, 10)}</td>
+                    <td style={{ fontWeight: 500 }}>{tg.transit_date?.slice(0,10)}</td>
                     <td>{tg.transit_city}</td>
                     <td>
                       <span style={{ fontSize: 11, color: tg.direction === 'OUTBOUND' ? 'var(--green-300)' : 'var(--warning)' }}>
@@ -239,16 +232,22 @@ export function EtDashboard() {
                     </td>
                     <td>{tg.et_flight_number || '—'}</td>
                     <td>{tg.destination || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {tg.checkin_date ? tg.checkin_date.slice(0,10) : ''}
+                      {tg.checkin_time ? ` ${tg.checkin_time.slice(0,5)}` : ''}
+                      {!tg.checkin_date && !tg.checkin_time ? '—' : ''}
+                    </td>
                     <td style={{ color: 'var(--text-muted)' }}>{tg.requested_pax || '—'}</td>
                     <td style={{ fontWeight: 600 }}>{tg.total_pax || 0}</td>
-                    <td>{transportBadge(tg.transport_status)}</td>
-                    <td>{tg.per_pax_cost_kwd ? `${tg.per_pax_cost_kwd} KWD` : '—'}</td>
+                    <td>
+                      <span style={{ fontSize: 12, color: 'var(--green-300)' }}>
+                        {tg.car_slot_count || 0} vehicle{tg.car_slot_count !== 1 ? 's' : ''}
+                      </span>
+                    </td>
                     <td>{statusBadge(tg.status)}</td>
                     <td>
                       <button className="button ghost" style={{ padding: '5px 12px', fontSize: 12 }}
-                        onClick={() => setSelected(tg)}>
-                        Open →
-                      </button>
+                        onClick={() => setSelected(tg)}>Open →</button>
                     </td>
                   </tr>
                 ))}
@@ -259,12 +258,7 @@ export function EtDashboard() {
       </div>
 
       {selected && (
-        <TripGroupDetail
-          role="ET"
-          tripGroup={selected}
-          onClose={() => setSelected(null)}
-          onUpdated={load}
-        />
+        <TripGroupDetail role="ET" tripGroup={selected} onClose={() => setSelected(null)} onUpdated={load} />
       )}
     </div>
   );

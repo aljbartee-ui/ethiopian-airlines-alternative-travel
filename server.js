@@ -53,7 +53,7 @@ async function runMigrations() {
 
       CREATE TABLE IF NOT EXISTS car_slots (
         id                  SERIAL PRIMARY KEY,
-        trip_group_id       INTEGER      NOT NULL REFERENCES trip_groups(id) ON DELETE CASCADE,
+        trip_group_id       INTEGER      REFERENCES trip_groups(id) ON DELETE CASCADE,
         vehicle_type        VARCHAR(30)  NOT NULL,
         total_seats         INTEGER      NOT NULL,
         bag_limit_per_pax   INTEGER,
@@ -70,6 +70,7 @@ async function runMigrations() {
       );
 
       ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS service_date DATE;
+      ALTER TABLE car_slots ALTER COLUMN trip_group_id DROP NOT NULL;
 
       CREATE TABLE IF NOT EXISTS passengers (
         id             SERIAL PRIMARY KEY,
@@ -354,8 +355,8 @@ app.post('/api/car-slots', requireRole('ALSAWAN'), async (req, res) => {
     broadcastUpdate('car-slots-changed', { trip_group_id: trip_group_id || null, action: 'created' });
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create car slot' });
+    console.error('POST /api/car-slots error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Failed to create car slot' });
   }
 });
 

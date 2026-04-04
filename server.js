@@ -22,6 +22,91 @@ const pool = new Pool({
   ssl: sslConfig || undefined
 });
 
+// ── Auto-migration (runs on startup) ────────────────────────────────────────
+async function runMigrations() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trip_groups (
+        id               SERIAL PRIMARY KEY,
+        transit_city     VARCHAR(10)  NOT NULL,
+        transit_date     DATE         NOT NULL,
+        direction        VARCHAR(10)  NOT NULL,
+        et_flight_number VARCHAR(20),
+        destination      VARCHAR(100),
+        checkin_date     DATE,
+        checkin_time     TIME,
+        requested_pax    INTEGER,
+        requester_pnr    VARCHAR(20),
+        requester_ticket VARCHAR(30),
+        status           VARCHAR(20)  NOT NULL DEFAULT 'OPEN',
+        demand_note      TEXT,
+        created_at       TIMESTAMP DEFAULT NOW(),
+        updated_at       TIMESTAMP DEFAULT NOW()
+      );
+
+      ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS checkin_date     DATE;
+      ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS checkin_time     TIME;
+      ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requested_pax    INTEGER;
+      ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_pnr    VARCHAR(20);
+      ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_ticket VARCHAR(30);
+
+      CREATE TABLE IF NOT EXISTS car_slots (
+        id                  SERIAL PRIMARY KEY,
+        trip_group_id       INTEGER      NOT NULL REFERENCES trip_groups(id) ON DELETE CASCADE,
+        vehicle_type        VARCHAR(30)  NOT NULL,
+        total_seats         INTEGER      NOT NULL,
+        bag_limit_per_pax   INTEGER,
+        bag_limit_note      TEXT,
+        per_pax_cost_kwd    NUMERIC(10,2),
+        pickup_location_url TEXT,
+        pickup_time         TIME,
+        departure_time      TIME,
+        service_date        DATE,
+        status              VARCHAR(20)  NOT NULL DEFAULT 'OPEN',
+        alsawan_note        TEXT,
+        created_at          TIMESTAMP DEFAULT NOW(),
+        updated_at          TIMESTAMP DEFAULT NOW()
+      );
+
+      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS service_date DATE;
+
+      CREATE TABLE IF NOT EXISTS passengers (
+        id             SERIAL PRIMARY KEY,
+        trip_group_id  INTEGER NOT NULL REFERENCES trip_groups(id) ON DELETE CASCADE,
+        name           VARCHAR(100),
+        pnr            VARCHAR(20),
+        ticket_number  VARCHAR(30),
+        pax_count      INTEGER NOT NULL DEFAULT 1,
+        bags_count     INTEGER,
+        visa_status    VARCHAR(20) DEFAULT 'NOT_APPLIED',
+        car_slot_id    INTEGER REFERENCES car_slots(id) ON DELETE SET NULL,
+        created_at     TIMESTAMP DEFAULT NOW(),
+        updated_at     TIMESTAMP DEFAULT NOW()
+      );
+
+      ALTER TABLE passengers ADD COLUMN IF NOT EXISTS car_slot_id INTEGER REFERENCES car_slots(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS transport_info (
+        id               SERIAL PRIMARY KEY,
+        trip_group_id    INTEGER NOT NULL REFERENCES trip_groups(id) ON DELETE CASCADE,
+        vehicle_type     VARCHAR(20),
+        per_pax_cost_kwd NUMERIC(10,2),
+        bag_limit_text   VARCHAR(200),
+        transport_status VARCHAR(20) DEFAULT 'COLLECTING',
+        alsawan_note     TEXT,
+        created_at       TIMESTAMP DEFAULT NOW(),
+        updated_at       TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log('✓ Database migrations applied successfully');
+  } catch (err) {
+    console.error('✗ Migration error:', err.message);
+  } finally {
+    client.release();
+  }
+}
+
 // ── SSE broadcast ─────────────────────────────────────────────────────────────
 const sseClients = new Set();
 
@@ -438,4 +523,9 @@ const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+runMigrations().then(() => {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}).catch(err => {
+  console.error('Failed to run migrations, starting anyway:', err.message);
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+});

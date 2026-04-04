@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useSSE } from '../useSSE';
 import { TripGroupDetail } from './TripGroupDetail';
@@ -82,6 +82,10 @@ export function EtDashboard() {
   const [savingPax,    setSavingPax]    = useState(false);
   const [paxError,     setPaxError]     = useState('');
 
+  // Ref to avoid stale closure in SSE handler
+  const selSlotRef = useRef(null);
+  useEffect(() => { selSlotRef.current = selSlot; }, [selSlot]);
+
   const loadGroups = useCallback(async () => {
     try { setTripGroups(await api('/api/trip-groups')); } catch(e){ console.error(e); }
   }, []);
@@ -95,15 +99,17 @@ export function EtDashboard() {
   }, []);
 
   useEffect(() => { loadGroups(); loadSlots(); }, [loadGroups, loadSlots]);
-  useEffect(() => { if (selSlot) loadSlotPax(selSlot.id); }, [selSlot, loadSlotPax]);
+  useEffect(() => { if (selSlot) loadSlotPax(selSlot.id); else setSlotPax([]); }, [selSlot?.id, loadSlotPax]);
 
   const handleLive = useCallback(() => {
     setLiveActive(true);
-    Promise.all([loadGroups(), loadSlots()]).then(() => {
-      if (selSlot) loadSlotPax(selSlot.id);
-      setTimeout(() => setLiveActive(false), 2000);
-    });
-  }, [loadGroups, loadSlots, loadSlotPax, selSlot]);
+    const currentSlot = selSlotRef.current;
+    Promise.all([
+      loadGroups(),
+      loadSlots(),
+      currentSlot ? loadSlotPax(currentSlot.id) : Promise.resolve()
+    ]).then(() => setTimeout(() => setLiveActive(false), 2000));
+  }, [loadGroups, loadSlots, loadSlotPax]);
 
   useSSE({ 'trip-groups-changed': handleLive, 'passengers-changed': handleLive, 'car-slots-changed': handleLive });
 
@@ -375,13 +381,13 @@ export function EtDashboard() {
                   {tripGroups.map(g => (
                     <tr key={g.id} style={{cursor:'pointer'}} onClick={() => setSelected(selected?.id===g.id ? null : g)}>
                       <td style={{whiteSpace:'nowrap',fontWeight:500}}>{fmtDate(g.transit_date)}</td>
-                      <td><strong style={{color:'var(--et-green-neon)'}}>{g.transit_city}</strong></td>
+                      <td><strong style={{color:'var(--text-main)'}}>{g.transit_city}</strong></td>
                       <td>
                         <span style={{fontSize:11,fontWeight:700,color:g.direction==='OUTBOUND'?'var(--et-green-neon)':'var(--et-gold-neon)'}}>
                           {g.direction==='OUTBOUND'?'↑ OUT':'↓ IN'}
                         </span>
                       </td>
-                      <td style={{color:'var(--et-green-neon)',fontWeight:600}}>{g.et_flight_number||'—'}</td>
+                      <td style={{color:'var(--text-main)',fontWeight:600}}>{g.et_flight_number||'—'}</td>
                       <td style={{color:'var(--text-muted)',fontSize:12}}>{g.destination||'—'}</td>
                       <td style={{fontSize:12,whiteSpace:'nowrap'}}>
                         {g.checkin_date ? fmtDate(g.checkin_date) : '—'}

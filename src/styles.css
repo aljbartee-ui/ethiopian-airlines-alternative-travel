@@ -27,10 +27,10 @@
   --border-focus:  #00FF8C;
   --border:        rgba(0,107,63,0.4);
 
-  --text-main: #e6f5ec;
-  --text-sub:  #9ec4ae;
-  --text-muted:#5e8f70;
-  --text-dim:  #2e5a3e;
+  --text-main: #f0f8f3;   /* near-white, primary text */
+  --text-sub:  #c8dfd0;   /* light grey-green, secondary text */
+  --text-muted:#8ab09a;   /* medium grey-green, labels/captions */
+  --text-dim:  #4a7a5c;   /* dimmed, placeholder/hint text */
 
   --glow-green: 0 0 14px rgba(0,255,140,0.4), 0 0 32px rgba(0,255,140,0.12);
   --glow-gold:  0 0 14px rgba(245,166,35,0.45), 0 0 32px rgba(245,166,35,0.14);
@@ -97,8 +97,8 @@ body {
   box-shadow: var(--glow-green);
 }
 
-.header-title { font-size: 15px; font-weight: 700; color: var(--text-main); letter-spacing: 0.01em; }
-.header-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.header-title { font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.01em; }
+.header-subtitle { font-size: 11px; color: #8ab09a; margin-top: 1px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
 .role-badge {
@@ -155,7 +155,7 @@ body {
   box-shadow: var(--glow-green);
 }
 .login-title { font-size: 22px; font-weight: 800; text-align: center; color: var(--text-main); margin-bottom: 4px; }
-.login-sub { font-size: 13px; text-align: center; color: var(--text-muted); margin-bottom: 30px; }
+.login-sub { font-size: 13px; text-align: center; color: #a0c4b0; margin-bottom: 30px; }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .card {
@@ -170,8 +170,8 @@ body {
   opacity: 0.75;
 }
 .card:hover { border-color: rgba(0,166,90,0.5); }
-.card-title { font-size: 16px; font-weight: 700; color: var(--text-main); letter-spacing: -0.2px; }
-.card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.card-title { font-size: 16px; font-weight: 700; color: #ffffff; letter-spacing: -0.2px; }
+.card-subtitle { font-size: 12px; color: #8ab09a; margin-top: 2px; }
 
 /* ── Section header ──────────────────────────────────────────────────────── */
 .section-header {
@@ -263,7 +263,7 @@ body {
 .form-field { display: flex; flex-direction: column; gap: 5px; flex: 1 1 150px; }
 
 .label {
-  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  font-size: 11px; font-weight: 600; color: #a0c4b0;
   text-transform: uppercase; letter-spacing: 0.07em;
 }
 
@@ -278,7 +278,7 @@ body {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(0,255,140,0.1), var(--glow-green);
 }
-.input::placeholder { color: var(--text-dim); }
+.input::placeholder { color: #4a7a5c; }
 .select {
   appearance: none; cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%235e8f70' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
@@ -308,7 +308,7 @@ body {
 }
 .table td {
   padding: 11px 12px; border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-sub); vertical-align: middle;
+  color: var(--text-main); vertical-align: middle;
 }
 .table tbody tr { transition: background 0.15s; }
 .table tbody tr:hover { background: rgba(0,255,140,0.04); }
@@ -409,7 +409,7 @@ body {
   line-height: 1; margin-bottom: 4px;
   text-shadow: 0 0 14px rgba(0,255,140,0.5);
 }
-.stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+.stat-label { font-size: 10px; color: #a0c4b0; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {

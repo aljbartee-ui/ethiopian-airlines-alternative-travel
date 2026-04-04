@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useSSE } from '../useSSE';
 import { TripGroupDetail } from './TripGroupDetail';
@@ -74,12 +74,24 @@ export function AlsawanDashboard() {
   const [savingPax,    setSavingPax]    = useState(false);
   const [paxError,     setPaxError]     = useState('');
 
+  // Use ref to always have latest selSlot in SSE callback (avoids stale closure)
+  const selSlotRef = useRef(null);
+  useEffect(() => { selSlotRef.current = selSlot; }, [selSlot]);
+
   const loadGroups = useCallback(async () => {
     try { setGroups(await api('/api/trip-groups')); } catch(e){ console.error(e); }
   }, []);
 
   const loadSlots = useCallback(async () => {
-    try { setAllSlots(await api('/api/car-slots')); } catch(e){ console.error(e); }
+    try {
+      const slots = await api('/api/car-slots');
+      setAllSlots(slots);
+      // Also update selSlot with fresh data if it's open
+      if (selSlotRef.current) {
+        const updated = slots.find(s => s.id === selSlotRef.current.id);
+        if (updated) setSelSlot(updated);
+      }
+    } catch(e){ console.error(e); }
   }, []);
 
   const loadSlotPax = useCallback(async (slotId) => {
@@ -87,17 +99,34 @@ export function AlsawanDashboard() {
   }, []);
 
   useEffect(() => { loadGroups(); loadSlots(); }, [loadGroups, loadSlots]);
-  useEffect(() => { if (selSlot) loadSlotPax(selSlot.id); }, [selSlot, loadSlotPax]);
 
+  // When a slot is selected, load its passengers
+  useEffect(() => {
+    if (selSlot) {
+      loadSlotPax(selSlot.id);
+    } else {
+      setSlotPax([]);
+    }
+  }, [selSlot?.id, loadSlotPax]);
+
+  // SSE live handler — always refreshes everything including open passenger panel
   const handleLive = useCallback(() => {
     setLiveActive(true);
-    Promise.all([loadGroups(), loadSlots()]).then(() => {
-      if (selSlot) loadSlotPax(selSlot.id);
+    const currentSlot = selSlotRef.current;
+    Promise.all([
+      loadGroups(),
+      loadSlots(),
+      currentSlot ? loadSlotPax(currentSlot.id) : Promise.resolve()
+    ]).then(() => {
       setTimeout(() => setLiveActive(false), 2000);
     });
-  }, [loadGroups, loadSlots, loadSlotPax, selSlot]);
+  }, [loadGroups, loadSlots, loadSlotPax]);
 
-  useSSE({ 'trip-groups-changed': handleLive, 'passengers-changed': handleLive, 'car-slots-changed': handleLive });
+  useSSE({
+    'trip-groups-changed': handleLive,
+    'passengers-changed':  handleLive,
+    'car-slots-changed':   handleLive
+  });
 
   /* ── car form ─────────────────────────────────────────────────────────── */
   const cf = (k, v) => setCarForm(p => ({ ...p, [k]: v }));
@@ -144,24 +173,23 @@ export function AlsawanDashboard() {
   const handleSlotStatusToggle = async slot => {
     const newStatus = slot.status === 'FULL' ? 'OPEN' : 'FULL';
     await api(`/api/car-slots/${slot.id}`, { method:'PUT', body: JSON.stringify({ ...slot, status: newStatus }) });
-    await Promise.all([loadSlots(), selSlot ? loadSlotPax(selSlot.id) : Promise.resolve()]);
+    await loadSlots();
   };
 
   const handleSlotComplete = async slot => {
     if (!window.confirm('Mark this vehicle as COMPLETED? This means it has departed.')) return;
     await api(`/api/car-slots/${slot.id}`, { method:'PUT', body: JSON.stringify({ ...slot, status: 'COMPLETED' }) });
     await loadSlots();
-    if (selSlot?.id === slot.id) setSelSlot(s => ({ ...s, status: 'COMPLETED' }));
   };
 
   const handleSlotDelete = async id => {
-    if (!window.confirm('Remove this vehicle?')) return;
+    if (!window.confirm('Remove this vehicle? All passengers in this vehicle will be unassigned.')) return;
     await api(`/api/car-slots/${id}`, { method:'DELETE' });
     await Promise.all([loadGroups(), loadSlots()]);
-    if (selSlot?.id === id) setSelSlot(null);
+    if (selSlot?.id === id) { setSelSlot(null); setSlotPax([]); }
   };
 
-  /* ── pax form (Alsawan can add pax to standalone vehicles too) ─────────── */
+  /* ── pax form ─────────────────────────────────────────────────────────── */
   const handlePaxSubmit = async e => {
     e.preventDefault();
     if (!selSlot) return;
@@ -184,8 +212,8 @@ export function AlsawanDashboard() {
   };
 
   /* ── derived stats ────────────────────────────────────────────────────── */
-  const totalPax   = groups.reduce((s,g) => s + Number(g.total_pax||0), 0);
-  const totalBags  = groups.reduce((s,g) => s + Number(g.total_bags||0), 0);
+  const totalPax   = allSlots.reduce((s,sl) => s + Number(sl.booked_pax||0), 0);
+  const totalBags  = allSlots.reduce((s,sl) => s + Number(sl.booked_bags||0), 0);
   const totalVeh   = allSlots.length;
   const standaloneSlots = allSlots.filter(s => !s.trip_group_id);
 
@@ -252,10 +280,15 @@ export function AlsawanDashboard() {
                 </div>
                 <div className="form-field">
                   <label className="label">Transit City {!carForm.trip_group_id && <span style={{color:'var(--et-red-neon)'}}>*</span>}</label>
-                  <select className="select" value={carForm.transit_city} onChange={e => cf('transit_city', e.target.value)}
-                    required={!carForm.trip_group_id}>
+                  <select className="select" value={carForm.transit_city} onChange={e => cf('transit_city', e.target.value)}>
                     <option value="">— Select —</option>
                     {AIRPORTS.map(a => <option key={a} value={a}>{a}</option>)}
+                    <option value="KWI">KWI – Kuwait</option>
+                    <option value="DXB">DXB – Dubai</option>
+                    <option value="DOH">DOH – Doha</option>
+                    <option value="BAH">BAH – Bahrain</option>
+                    <option value="MCT">MCT – Muscat</option>
+                    <option value="AUH">AUH – Abu Dhabi</option>
                     <option value="OTHER">Other…</option>
                   </select>
                 </div>
@@ -421,8 +454,10 @@ export function AlsawanDashboard() {
       {tab === 'vehicles' && (
         <div className="card">
           <div className="section-header" style={{marginBottom:14}}>
-            <div className="card-title">🚌 All Posted Vehicles</div>
-            <div className="card-subtitle">Standalone and group-linked vehicles — click a vehicle to see its passengers</div>
+            <div>
+              <div className="card-title">🚌 All Posted Vehicles</div>
+              <div className="card-subtitle">Click any vehicle to expand and see passengers added by ET — updates live in real time</div>
+            </div>
           </div>
           {allSlots.length === 0 ? (
             <div className="empty-state">
@@ -440,21 +475,29 @@ export function AlsawanDashboard() {
                 return (
                   <div key={slot.id}>
                     <div className={glowClass(slot)} style={{cursor:'pointer'}} onClick={() => {
-                      setSelSlot(isSelected ? null : slot);
-                      setShowPaxForm(false); setPaxForm(EMPTY_PAX); setPaxError('');
+                      if (isSelected) {
+                        setSelSlot(null);
+                      } else {
+                        setSelSlot(slot);
+                        setShowPaxForm(false); setPaxForm(EMPTY_PAX); setPaxError('');
+                      }
                     }}>
                       {/* Header row */}
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
                         <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
                           <span style={{fontWeight:700,fontSize:14}}>{slot.vehicle_type}</span>
                           <StatusBadge s={slot.status} />
-                          {slot.transit_city && (
+                          {(slot.transit_city || slot.tg_transit_city) && (
                             <span style={{fontSize:12,background:'rgba(0,107,63,0.2)',border:'1px solid rgba(0,255,140,0.2)',borderRadius:4,padding:'2px 8px',color:'var(--et-green-neon)',fontWeight:600}}>
-                              {slot.transit_city}
+                              {slot.transit_city || slot.tg_transit_city}
                             </span>
                           )}
                           {slot.trip_group_id ? (
-                            <span style={{fontSize:11,color:'var(--text-muted)'}}>Linked to group #{slot.trip_group_id}</span>
+                            <span style={{fontSize:11,color:'var(--text-muted)'}}>
+                              Group #{slot.trip_group_id}
+                              {slot.tg_transit_date && ` · ${fmtDate(slot.tg_transit_date)}`}
+                              {slot.et_flight_number && ` · ${slot.et_flight_number}`}
+                            </span>
                           ) : (
                             <span style={{fontSize:11,background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:4,padding:'2px 8px',color:'var(--et-gold-neon)'}}>Standalone</span>
                           )}
@@ -472,29 +515,29 @@ export function AlsawanDashboard() {
                               bag_limit_note: slot.bag_limit_note || '',
                               per_pax_cost_kwd: slot.per_pax_cost_kwd || '',
                               pickup_location_url: slot.pickup_location_url || '',
-                              pickup_time: slot.pickup_time || '',
-                              departure_time: slot.departure_time || '',
+                              pickup_time: slot.pickup_time ? slot.pickup_time.slice(0,5) : '',
+                              departure_time: slot.departure_time ? slot.departure_time.slice(0,5) : '',
                               service_date: slot.service_date ? slot.service_date.slice(0,10) : '',
                               transit_city: AIRPORTS.includes(slot.transit_city) ? slot.transit_city : (slot.transit_city ? 'OTHER' : ''),
                               transit_city_other: AIRPORTS.includes(slot.transit_city) ? '' : (slot.transit_city || ''),
                               alsawan_note: slot.alsawan_note || '',
                             });
                             setShowCarForm(true); setError('');
-                          }}>Edit</button>
+                          }}>✏ Edit</button>
                           <button className="button ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={() => handleSlotStatusToggle(slot)}>
                             {slot.status === 'FULL' ? 'Re-open' : 'Mark Full'}
                           </button>
                           {(slot.status === 'FULL' || booked >= total) && slot.status !== 'COMPLETED' && (
                             <button className="button complete" style={{fontSize:11,padding:'4px 10px'}} onClick={() => handleSlotComplete(slot)}>✓ Complete</button>
                           )}
-                          <button className="button secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={() => handleSlotDelete(slot.id)}>Remove</button>
+                          <button className="button secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={() => handleSlotDelete(slot.id)}>🗑 Remove</button>
                         </div>
                       </div>
 
                       {/* Details row */}
                       <div style={{display:'flex',gap:16,flexWrap:'wrap',marginTop:8,fontSize:12,color:'var(--text-muted)'}}>
                         <span>🪑 {booked}/{total} seats</span>
-                        {slot.bag_limit_per_pax && <span>🧳 {slot.bag_limit_per_pax} bags/pax</span>}
+                        {slot.bag_limit_per_pax != null && <span>🧳 Max {slot.bag_limit_per_pax} bags/pax</span>}
                         {slot.bag_limit_note && <span>📋 {slot.bag_limit_note}</span>}
                         {slot.pickup_time && <span>📍 Pickup: {fmtTime(slot.pickup_time)}</span>}
                         {slot.departure_time && <span>🚀 Departs: {fmtTime(slot.departure_time)}</span>}
@@ -504,13 +547,14 @@ export function AlsawanDashboard() {
                             📌 Pickup location ↗
                           </a>
                         )}
+                        {slot.alsawan_note && <span style={{color:'var(--et-gold-neon)'}}>💬 {slot.alsawan_note}</span>}
                       </div>
 
                       {/* Capacity bar */}
                       <div style={{marginTop:10}}>
                         <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--text-dim)',marginBottom:4}}>
-                          <span>{booked} booked · {total - booked} remaining · {Number(slot.booked_bags||0)} bags</span>
-                          <span>{pct}% full</span>
+                          <span>{booked} booked · {total - booked} remaining · {Number(slot.booked_bags||0)} bags total</span>
+                          <span style={{fontWeight:600,color: pct>=100?'var(--et-red-neon)':pct>=80?'var(--warning)':'var(--et-green-neon)'}}>{pct}% full</span>
                         </div>
                         <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3}}>
                           <div style={{
@@ -522,79 +566,61 @@ export function AlsawanDashboard() {
                       </div>
 
                       <div style={{marginTop:8,fontSize:12,color:'var(--text-dim)'}}>
-                        {isSelected ? '▲ Click to collapse passengers' : '▼ Click to view/manage passengers'}
+                        {isSelected ? '▲ Click to collapse passengers' : `▼ Click to view passengers (${booked} added by ET)`}
                       </div>
                     </div>
 
-                    {/* Expanded passenger panel */}
+                    {/* Expanded passenger panel — shows passengers added by ET */}
                     {isSelected && (
-                      <div className="sub-section" style={{marginTop:0,borderTop:'none',borderRadius:'0 0 10px 10px',background:'rgba(8,18,9,0.9)'}}>
+                      <div className="sub-section" style={{marginTop:0,borderTop:'none',borderRadius:'0 0 10px 10px',background:'rgba(8,18,9,0.95)'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                          <div className="sub-section-title" style={{margin:0}}>👥 Passengers in this vehicle</div>
-                          <button className="button" style={{fontSize:12,padding:'6px 12px'}}
-                            onClick={() => { setShowPaxForm(v => !v); setPaxForm(EMPTY_PAX); setPaxError(''); }}>
-                            {showPaxForm ? '✕ Cancel' : '+ Add Passenger'}
-                          </button>
+                          <div>
+                            <div className="sub-section-title" style={{margin:0}}>👥 Passengers added by ET</div>
+                            <div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>
+                              This list updates live when ET adds or removes passengers
+                            </div>
+                          </div>
                         </div>
 
-                        {showPaxForm && (
-                          <form onSubmit={handlePaxSubmit} style={{marginBottom:14}}>
-                            <div className="form-row">
-                              <div className="form-field"><label className="label">Name</label>
-                                <input className="input" name="name" value={paxForm.name} onChange={e => setPaxForm(p=>({...p,name:e.target.value}))} placeholder="Passenger name" /></div>
-                              <div className="form-field"><label className="label">PNR</label>
-                                <input className="input" name="pnr" value={paxForm.pnr} onChange={e => setPaxForm(p=>({...p,pnr:e.target.value}))} placeholder="e.g. ABC123" /></div>
-                              <div className="form-field"><label className="label">Ticket No.</label>
-                                <input className="input" name="ticket_number" value={paxForm.ticket_number} onChange={e => setPaxForm(p=>({...p,ticket_number:e.target.value}))} placeholder="e.g. 0711234567890" /></div>
-                              <div className="form-field" style={{flex:'0 1 100px'}}><label className="label">Pax Count</label>
-                                <input className="input" type="number" min="1" value={paxForm.pax_count} onChange={e => setPaxForm(p=>({...p,pax_count:e.target.value}))} /></div>
-                              <div className="form-field" style={{flex:'0 1 100px'}}><label className="label">Bags</label>
-                                <input className="input" type="number" min="0" value={paxForm.bags_count} onChange={e => setPaxForm(p=>({...p,bags_count:e.target.value}))} placeholder="0" /></div>
-                              <div className="form-field"><label className="label">Visa Status</label>
-                                <select className="select" value={paxForm.visa_status} onChange={e => setPaxForm(p=>({...p,visa_status:e.target.value}))}>
-                                  <option value="NOT_APPLIED">Not Applied</option>
-                                  <option value="IN_PROCESS">In Process</option>
-                                  <option value="APPROVED">Approved</option>
-                                </select></div>
-                            </div>
-                            {paxError && <div className="error-box">⚠ {paxError}</div>}
-                            <div style={{display:'flex',gap:8}}>
-                              <button className="button" type="submit" disabled={savingPax}>{savingPax ? 'Saving…' : '+ Add'}</button>
-                              <button type="button" className="button ghost" onClick={() => setShowPaxForm(false)}>Cancel</button>
-                            </div>
-                          </form>
-                        )}
-
                         {slotPax.length === 0 ? (
-                          <div style={{textAlign:'center',padding:'16px',color:'var(--text-dim)',fontSize:13}}>No passengers added yet</div>
+                          <div style={{textAlign:'center',padding:'20px',color:'var(--text-dim)',fontSize:13,border:'1px dashed rgba(255,255,255,0.1)',borderRadius:8}}>
+                            <div style={{fontSize:24,marginBottom:8}}>👤</div>
+                            No passengers added yet — ET team will fill this vehicle
+                          </div>
                         ) : (
                           <>
                             <div style={{overflowX:'auto'}}>
                               <table className="table">
                                 <thead>
-                                  <tr><th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th></th></tr>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>Name</th>
+                                    <th>PNR</th>
+                                    <th>Ticket No.</th>
+                                    <th>Pax</th>
+                                    <th>Bags</th>
+                                    <th>Visa</th>
+                                  </tr>
                                 </thead>
                                 <tbody>
-                                  {slotPax.map(p => (
+                                  {slotPax.map((p, i) => (
                                     <tr key={p.id}>
-                                      <td>{p.name||'—'}</td>
-                                      <td style={{fontFamily:'monospace'}}>{p.pnr||'—'}</td>
-                                      <td style={{fontFamily:'monospace',fontSize:12}}>{p.ticket_number||'—'}</td>
-                                      <td>{p.pax_count}</td>
-                                      <td>{p.bags_count??'—'}</td>
+                                      <td style={{color:'var(--text-dim)',fontSize:11}}>{i+1}</td>
+                                      <td style={{fontWeight:500}}>{p.name||'—'}</td>
+                                      <td style={{fontFamily:'monospace',color:'var(--et-green-neon)'}}>{p.pnr||'—'}</td>
+                                      <td style={{fontFamily:'monospace',fontSize:12,color:'var(--text-muted)'}}>{p.ticket_number||'—'}</td>
+                                      <td style={{fontWeight:700,color:'var(--et-gold-neon)'}}>{p.pax_count}</td>
+                                      <td>{p.bags_count != null ? p.bags_count : '—'}</td>
                                       <td><VisaBadge v={p.visa_status} /></td>
-                                      <td>
-                                        <button className="button secondary" style={{padding:'4px 10px',fontSize:11}}
-                                          onClick={() => handlePaxDelete(p.id)}>Delete</button>
-                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </div>
-                            <div style={{marginTop:10,fontSize:12,color:'var(--text-muted)',display:'flex',gap:20}}>
-                              <span>Total pax: <strong style={{color:'var(--text-main)'}}>{slotPax.reduce((s,p)=>s+p.pax_count,0)}</strong></span>
-                              <span>Total bags: <strong style={{color:'var(--text-main)'}}>{slotPax.reduce((s,p)=>s+(p.bags_count||0),0)}</strong></span>
+                            <div style={{marginTop:12,padding:'10px 14px',background:'rgba(0,107,63,0.1)',border:'1px solid rgba(0,255,140,0.15)',borderRadius:8,display:'flex',gap:24,fontSize:13}}>
+                              <span>Total passengers: <strong style={{color:'var(--et-gold-neon)'}}>{slotPax.reduce((s,p)=>s+Number(p.pax_count||0),0)}</strong></span>
+                              <span>Total bags: <strong style={{color:'var(--et-gold-neon)'}}>{slotPax.reduce((s,p)=>s+Number(p.bags_count||0),0)}</strong></span>
+                              <span>Remaining seats: <strong style={{color: total-booked===0?'var(--et-red-neon)':'var(--et-green-neon)'}}>{total - booked}</strong></span>
                             </div>
                           </>
                         )}

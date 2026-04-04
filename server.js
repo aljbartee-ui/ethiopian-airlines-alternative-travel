@@ -513,6 +513,71 @@ app.delete('/api/passengers/:id', requireRole('ET'), async (req, res) => {
   }
 });
 
+// ── Standalone vehicle passengers (car_slot_id only, no trip_group_id) ─────────────
+
+app.get('/api/car-slots/:id/passengers', requireRole(), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, cs.vehicle_type AS car_vehicle_type
+       FROM passengers p
+       LEFT JOIN car_slots cs ON cs.id = p.car_slot_id
+       WHERE p.car_slot_id = $1
+       ORDER BY p.id ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch passengers' });
+  }
+});
+
+app.post('/api/car-slots/:id/passengers', requireRole('ET'), async (req, res) => {
+  const slotId = req.params.id;
+  const { name, pnr, ticket_number, pax_count, bags_count, visa_status } = req.body;
+  try {
+    // Capacity check
+    const capacityCheck = await pool.query(`
+      SELECT cs.total_seats, cs.bag_limit_per_pax, cs.status,
+        COALESCE(SUM(p.pax_count), 0) AS booked_pax
+      FROM car_slots cs
+      LEFT JOIN passengers p ON p.car_slot_id = cs.id
+      WHERE cs.id = $1
+      GROUP BY cs.id
+    `, [slotId]);
+    const slot = capacityCheck.rows[0];
+    if (!slot) return res.status(404).json({ error: 'Vehicle not found' });
+    if (slot.status === 'FULL' || slot.status === 'COMPLETED' || slot.status === 'CANCELLED') {
+      return res.status(400).json({ error: `This vehicle is ${slot.status}. Please choose another.` });
+    }
+    const newPax = Number(slot.booked_pax) + Number(pax_count || 1);
+    if (newPax > slot.total_seats) {
+      return res.status(400).json({ error: `Not enough seats. Only ${slot.total_seats - slot.booked_pax} seat(s) remaining.` });
+    }
+    if (slot.bag_limit_per_pax && bags_count) {
+      const maxBags = slot.bag_limit_per_pax * Number(pax_count || 1);
+      if (Number(bags_count) > maxBags) {
+        return res.status(400).json({ error: `Bag limit exceeded. Max ${slot.bag_limit_per_pax} bag(s)/pax (${maxBags} total for ${pax_count} pax).` });
+      }
+    }
+    if (newPax === slot.total_seats) {
+      await pool.query(`UPDATE car_slots SET status='FULL', updated_at=NOW() WHERE id=$1`, [slotId]);
+      broadcastUpdate('car-slots-changed', { slot_id: Number(slotId), action: 'full' });
+    }
+    const result = await pool.query(
+      `INSERT INTO passengers (trip_group_id, car_slot_id, name, pnr, ticket_number, pax_count, bags_count, visa_status)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [slotId, name || null, pnr || null, ticket_number || null,
+       pax_count || 1, bags_count || null, visa_status || 'NOT_APPLIED']
+    );
+    broadcastUpdate('car-slots-changed', { slot_id: Number(slotId), action: 'passenger-added' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to add passenger' });
+  }
+});
+
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);

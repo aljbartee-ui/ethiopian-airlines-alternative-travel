@@ -13,11 +13,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Detect if we are running on Render (or any production environment)
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
+// PostgreSQL pool — enable SSL on Render
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('render.com')
-    ? { rejectUnauthorized: false }
-    : false
+  ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
 });
 
 app.use(express.json());
@@ -28,6 +30,9 @@ app.use(
     credentials: true
   })
 );
+
+// Trust the Render proxy so cookies work correctly over HTTPS
+app.set('trust proxy', 1);
 
 const ET_PASSWORD = process.env.ET_PASSWORD;
 const ALSAWAN_PASSWORD = process.env.ALSAWAN_PASSWORD;
@@ -51,8 +56,8 @@ app.post('/api/login', (req, res) => {
   }
 
   let role = null;
-  if (password === ET_PASSWORD) role = 'ET';
-  if (password === ALSAWAN_PASSWORD) role = 'ALSAWAN';
+  if (ET_PASSWORD && password === ET_PASSWORD) role = 'ET';
+  if (ALSAWAN_PASSWORD && password === ALSAWAN_PASSWORD) role = 'ALSAWAN';
 
   if (!role) {
     return res.status(401).json({ error: 'Invalid password' });
@@ -61,7 +66,8 @@ app.post('/api/login', (req, res) => {
   res.cookie('role', role, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production'
+    // Only set secure=true when actually behind HTTPS (Render sets x-forwarded-proto)
+    secure: IS_PRODUCTION
   });
 
   return res.json({ role });
@@ -351,7 +357,7 @@ app.post('/api/trip-groups/:id/transport', requireRole('ALSAWAN'), async (req, r
   }
 });
 
-// Serve frontend
+// Serve frontend (must come after all API routes)
 app.use(express.static(path.join(__dirname, 'dist')));
 
 app.get('*', (req, res) => {
@@ -359,5 +365,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} [production=${IS_PRODUCTION}]`);
 });

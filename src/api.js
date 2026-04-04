@@ -8,15 +8,24 @@ export async function api(path, options = {}) {
     ...options
   });
 
-  if (!res.ok) {
-    let msg = 'Request failed';
+  // Read the raw text first so we never hit "Unexpected end of JSON input"
+  const text = await res.text();
+
+  let data = null;
+  if (text) {
     try {
-      const data = await res.json();
-      msg = data.error || msg;
-    } catch (e) {}
+      data = JSON.parse(text);
+    } catch (e) {
+      // Server returned non-JSON (e.g. HTML error page)
+      if (!res.ok) throw new Error(`Server error (${res.status})`);
+      throw new Error('Invalid response from server');
+    }
+  }
+
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : `Request failed (${res.status})`;
     throw new Error(msg);
   }
 
-  if (res.status === 204) return null;
-  return res.json();
+  return data;
 }

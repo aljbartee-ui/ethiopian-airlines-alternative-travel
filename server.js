@@ -82,10 +82,10 @@ app.get('/api/trip-groups', requireRole(), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT tg.*,
-        COALESCE(SUM(p.pax_count), 0)  AS total_pax,
-        COALESCE(SUM(p.bags_count), 0) AS total_bags,
-        COUNT(DISTINCT cs.id)           AS car_slot_count,
-        COALESCE(SUM(cs.total_seats), 0) AS total_seats_available
+        COALESCE(SUM(p.pax_count), 0)    AS total_pax,
+        COALESCE(SUM(p.bags_count), 0)   AS total_bags,
+        COUNT(DISTINCT cs.id)             AS car_slot_count,
+        COALESCE(SUM(cs.total_seats), 0)  AS total_seats_available
       FROM trip_groups tg
       LEFT JOIN passengers p  ON p.trip_group_id = tg.id
       LEFT JOIN car_slots  cs ON cs.trip_group_id = tg.id
@@ -158,7 +158,42 @@ app.put('/api/trip-groups/:id', requireRole('ET'), async (req, res) => {
   }
 });
 
-// ── Car Slots (Alsawan posts available vehicles) ───────────────────────────────
+app.delete('/api/trip-groups/:id', requireRole('ET'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM trip_groups WHERE id=$1', [req.params.id]);
+    broadcastUpdate('trip-groups-changed', { action: 'deleted', id: Number(req.params.id) });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete trip group' });
+  }
+});
+
+// ── Car Slots ─────────────────────────────────────────────────────────────────
+// Alsawan can also create standalone car slots (not tied to a trip group) with their own date
+
+app.get('/api/car-slots', requireRole(), async (req, res) => {
+  // Return all car slots (optionally filtered by date)
+  try {
+    const result = await pool.query(`
+      SELECT cs.*,
+        tg.transit_city, tg.transit_date, tg.direction, tg.et_flight_number, tg.destination,
+        tg.checkin_date, tg.checkin_time,
+        COALESCE(SUM(p.pax_count), 0)  AS booked_pax,
+        COALESCE(SUM(p.bags_count), 0) AS booked_bags,
+        (cs.total_seats - COALESCE(SUM(p.pax_count), 0)) AS remaining_seats
+      FROM car_slots cs
+      LEFT JOIN trip_groups tg ON tg.id = cs.trip_group_id
+      LEFT JOIN passengers p ON p.car_slot_id = cs.id
+      GROUP BY cs.id, tg.id
+      ORDER BY cs.service_date ASC, cs.created_at ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch car slots' });
+  }
+});
 
 app.get('/api/trip-groups/:id/car-slots', requireRole(), async (req, res) => {
   try {
@@ -183,20 +218,55 @@ app.get('/api/trip-groups/:id/car-slots', requireRole(), async (req, res) => {
 app.post('/api/trip-groups/:id/car-slots', requireRole('ALSAWAN'), async (req, res) => {
   const {
     vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, alsawan_note
+    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
+    service_date, alsawan_note
+  } = req.body;
+  try {
+    // Use service_date if provided, otherwise inherit from trip group
+    let date = service_date || null;
+    if (!date) {
+      const tg = await pool.query('SELECT transit_date FROM trip_groups WHERE id=$1', [req.params.id]);
+      date = tg.rows[0]?.transit_date || null;
+    }
+    const result = await pool.query(
+      `INSERT INTO car_slots
+       (trip_group_id, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
+        per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.params.id, vehicle_type, total_seats,
+       bag_limit_per_pax || null, bag_limit_note || null,
+       per_pax_cost_kwd || null, pickup_location_url || null,
+       pickup_time || null, departure_time || null,
+       date, alsawan_note || null]
+    );
+    broadcastUpdate('car-slots-changed', { trip_group_id: Number(req.params.id), action: 'created' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create car slot' });
+  }
+});
+
+// Alsawan creates a standalone car slot (not tied to a specific trip group)
+app.post('/api/car-slots', requireRole('ALSAWAN'), async (req, res) => {
+  const {
+    trip_group_id, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
+    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
+    service_date, alsawan_note
   } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO car_slots
        (trip_group_id, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-        per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, alsawan_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.params.id, vehicle_type, total_seats,
+        per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [trip_group_id || null, vehicle_type, total_seats,
        bag_limit_per_pax || null, bag_limit_note || null,
        per_pax_cost_kwd || null, pickup_location_url || null,
-       pickup_time || null, departure_time || null, alsawan_note || null]
+       pickup_time || null, departure_time || null,
+       service_date || null, alsawan_note || null]
     );
-    broadcastUpdate('car-slots-changed', { trip_group_id: Number(req.params.id), action: 'created' });
+    broadcastUpdate('car-slots-changed', { trip_group_id: trip_group_id || null, action: 'created' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -209,22 +279,21 @@ app.put('/api/car-slots/:id', requireRole('ALSAWAN'), async (req, res) => {
   const {
     vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
     per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
-    status, alsawan_note
+    service_date, status, alsawan_note
   } = req.body;
   try {
     const result = await pool.query(
       `UPDATE car_slots SET
         vehicle_type=$1, total_seats=$2, bag_limit_per_pax=$3, bag_limit_note=$4,
         per_pax_cost_kwd=$5, pickup_location_url=$6, pickup_time=$7, departure_time=$8,
-        status=$9, alsawan_note=$10, updated_at=NOW()
-       WHERE id=$11 RETURNING *`,
+        service_date=$9, status=$10, alsawan_note=$11, updated_at=NOW()
+       WHERE id=$12 RETURNING *`,
       [vehicle_type, total_seats,
        bag_limit_per_pax || null, bag_limit_note || null,
        per_pax_cost_kwd || null, pickup_location_url || null,
        pickup_time || null, departure_time || null,
-       status || 'OPEN', alsawan_note || null, id]
+       service_date || null, status || 'OPEN', alsawan_note || null, id]
     );
-    // Auto-check if slot is now full and broadcast
     const slotRow = result.rows[0];
     broadcastUpdate('car-slots-changed', { trip_group_id: slotRow.trip_group_id, action: 'updated', id: Number(id) });
     res.json(slotRow);
@@ -269,11 +338,11 @@ app.post('/api/trip-groups/:id/passengers', requireRole('ET'), async (req, res) 
   const { name, pnr, ticket_number, pax_count, bags_count, visa_status, car_slot_id } = req.body;
   const tripGroupId = req.params.id;
   try {
-    // If assigning to a car slot, check capacity
     if (car_slot_id) {
       const capacityCheck = await pool.query(`
         SELECT cs.total_seats, cs.bag_limit_per_pax, cs.status,
-          COALESCE(SUM(p.pax_count), 0) AS booked_pax
+          COALESCE(SUM(p.pax_count), 0) AS booked_pax,
+          COALESCE(SUM(p.bags_count), 0) AS booked_bags
         FROM car_slots cs
         LEFT JOIN passengers p ON p.car_slot_id = cs.id
         WHERE cs.id = $1
@@ -283,16 +352,24 @@ app.post('/api/trip-groups/:id/passengers', requireRole('ET'), async (req, res) 
       const slot = capacityCheck.rows[0];
       if (!slot) return res.status(404).json({ error: 'Car slot not found' });
       if (slot.status === 'FULL' || slot.status === 'CANCELLED') {
-        return res.status(400).json({ error: `This vehicle is ${slot.status}. Please choose another or request a new one.` });
+        return res.status(400).json({ error: `This vehicle is ${slot.status}. Please choose another or request a new one from Alsawan.` });
       }
-      const newTotal = Number(slot.booked_pax) + Number(pax_count || 1);
-      if (newTotal > slot.total_seats) {
+      const newPax = Number(slot.booked_pax) + Number(pax_count || 1);
+      if (newPax > slot.total_seats) {
         return res.status(400).json({
           error: `Not enough seats. This vehicle has ${slot.total_seats - slot.booked_pax} seat(s) remaining.`
         });
       }
-      // Auto-mark slot as FULL if now at capacity
-      if (newTotal === slot.total_seats) {
+      // Check bag limit
+      if (slot.bag_limit_per_pax && bags_count) {
+        const maxBags = slot.bag_limit_per_pax * Number(pax_count || 1);
+        if (Number(bags_count) > maxBags) {
+          return res.status(400).json({
+            error: `Bag limit exceeded. This vehicle allows ${slot.bag_limit_per_pax} bag(s) per passenger (max ${maxBags} bags for ${pax_count} pax).`
+          });
+        }
+      }
+      if (newPax === slot.total_seats) {
         await pool.query(`UPDATE car_slots SET status='FULL', updated_at=NOW() WHERE id=$1`, [car_slot_id]);
         broadcastUpdate('car-slots-changed', { trip_group_id: Number(tripGroupId), action: 'full', slot_id: Number(car_slot_id) });
       }
@@ -337,7 +414,6 @@ app.delete('/api/passengers/:id', requireRole('ET'), async (req, res) => {
     await pool.query('DELETE FROM passengers WHERE id=$1', [req.params.id]);
     const p = row.rows[0];
     if (p) {
-      // If the car slot was FULL, re-open it
       if (p.car_slot_id) {
         await pool.query(`UPDATE car_slots SET status='OPEN', updated_at=NOW() WHERE id=$1 AND status='FULL'`, [p.car_slot_id]);
       }

@@ -23,10 +23,19 @@ function slotStatusBadge(s) {
   const map = {
     OPEN:      { cls: 'badge badge-open',       label: '● Open' },
     FULL:      { cls: 'badge badge-closed',      label: '⊘ Full' },
+    COMPLETED: { cls: 'badge badge-confirmed',   label: '✓ Completed' },
     CANCELLED: { cls: 'badge badge-feasible',    label: '✕ Cancelled' },
   };
   const b = map[s] || map.OPEN;
   return <span className={b.cls}>{b.label}</span>;
+}
+
+function getCardGlowClass(slot) {
+  if (slot.status === 'COMPLETED') return 'vehicle-card completed';
+  if (slot.status === 'FULL') return 'vehicle-card full';
+  const pct = slot.total_seats > 0 ? slot.booked_pax / slot.total_seats : 0;
+  if (pct >= 0.8) return 'vehicle-card near-full';
+  return 'vehicle-card';
 }
 
 function visaBadge(v) {
@@ -131,7 +140,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
   }
 
   async function handleSlotStatusToggle(slot) {
-    const newStatus = slot.status === 'OPEN' ? 'FULL' : 'OPEN';
+    const newStatus = slot.status === 'FULL' ? 'OPEN' : 'FULL';
     await api(`/api/car-slots/${slot.id}`, {
       method: 'PUT',
       body: JSON.stringify({ ...slot, status: newStatus })
@@ -313,11 +322,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {carSlots.map(slot => (
-              <div key={slot.id} style={{
-                background: 'rgba(10,26,14,0.7)',
-                border: `1px solid ${slot.status === 'FULL' ? 'rgba(224,82,82,0.4)' : 'rgba(30,74,40,0.7)'}`,
-                borderRadius: 8, padding: '14px 16px'
-              }}>
+              <div key={slot.id} className={getCardGlowClass(slot)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 700, fontSize: 14 }}>{slot.vehicle_type}</span>
@@ -354,6 +359,13 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                         onClick={() => handleSlotStatusToggle(slot)}>
                         {slot.status === 'FULL' ? 'Re-open' : 'Mark Full'}
                       </button>
+                      {(slot.status === 'FULL' || (slot.booked_pax >= slot.total_seats && slot.total_seats > 0)) && slot.status !== 'COMPLETED' && (
+                        <button className="button complete" style={{ fontSize: 11, padding: '4px 10px' }}
+                          onClick={async () => {
+                            if (!window.confirm('Mark this vehicle as COMPLETED? This means it has departed.')) return;
+                            await api(`/api/car-slots/${slot.id}`, { method: 'PUT', body: JSON.stringify({ ...slot, status: 'COMPLETED' }) });
+                          }}>✓ Complete</button>
+                      )}
                       <button className="button secondary" style={{ fontSize: 11, padding: '4px 10px' }}
                         onClick={() => handleSlotDelete(slot.id)}>Remove</button>
                     </div>

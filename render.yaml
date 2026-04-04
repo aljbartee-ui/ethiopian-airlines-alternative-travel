@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: et-alsawan-coordination
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: ET_PASSWORD
+        sync: false
+      - key: ALSAWAN_PASSWORD
+        sync: false

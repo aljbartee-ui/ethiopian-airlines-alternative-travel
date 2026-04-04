@@ -7,13 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "render-build": "npm install && npm run build"
   },
   "dependencies": {
     "express": "^4.19.2",
     "pg": "^8.11.5",
     "cors": "^2.8.5",
-    "cookie-parser": "^1.4.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

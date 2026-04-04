@@ -82,6 +82,12 @@ export function EtDashboard() {
   const [savingPax,    setSavingPax]    = useState(false);
   const [paxError,     setPaxError]     = useState('');
 
+  /* edit passenger state */
+  const [editingPax,   setEditingPax]   = useState(null);   // passenger object being edited
+  const [editPaxForm,  setEditPaxForm]  = useState(EMPTY_PAX);
+  const [savingEdit,   setSavingEdit]   = useState(false);
+  const [editPaxError, setEditPaxError] = useState('');
+
   // Ref to avoid stale closure in SSE handler
   const selSlotRef = useRef(null);
   useEffect(() => { selSlotRef.current = selSlot; }, [selSlot]);
@@ -91,7 +97,15 @@ export function EtDashboard() {
   }, []);
 
   const loadSlots = useCallback(async () => {
-    try { setAllSlots(await api('/api/car-slots')); } catch(e){ console.error(e); }
+    try {
+      const slots = await api('/api/car-slots');
+      setAllSlots(slots);
+      // Keep selSlot in sync with fresh data
+      if (selSlotRef.current) {
+        const updated = slots.find(s => s.id === selSlotRef.current.id);
+        if (updated) setSelSlot(updated);
+      }
+    } catch(e){ console.error(e); }
   }, []);
 
   const loadSlotPax = useCallback(async id => {
@@ -177,7 +191,7 @@ export function EtDashboard() {
     finally { setSaving(false); }
   };
 
-  /* ── standalone pax form ──────────────────────────────────────────────── */
+  /* ── standalone pax: add ──────────────────────────────────────────────── */
   const handlePaxSubmit = async e => {
     e.preventDefault();
     if (!selSlot) return;
@@ -192,8 +206,47 @@ export function EtDashboard() {
     finally { setSavingPax(false); }
   };
 
+  /* ── standalone pax: open edit ────────────────────────────────────────── */
+  const openEditPax = pax => {
+    setEditingPax(pax);
+    setEditPaxForm({
+      name:          pax.name          || '',
+      pnr:           pax.pnr           || '',
+      ticket_number: pax.ticket_number || '',
+      pax_count:     pax.pax_count     || 1,
+      bags_count:    pax.bags_count    != null ? pax.bags_count : '',
+      visa_status:   pax.visa_status   || 'NOT_APPLIED',
+    });
+    setEditPaxError('');
+    // Close add form if open
+    setShowPaxForm(false);
+  };
+
+  /* ── standalone pax: save edit ────────────────────────────────────────── */
+  const handleEditPaxSubmit = async e => {
+    e.preventDefault();
+    if (!editingPax) return;
+    setSavingEdit(true); setEditPaxError('');
+    try {
+      const body = {
+        ...editPaxForm,
+        pax_count:  Number(editPaxForm.pax_count) || 1,
+        bags_count: editPaxForm.bags_count !== '' ? Number(editPaxForm.bags_count) : null,
+        car_slot_id: editingPax.car_slot_id,
+      };
+      await api(`/api/passengers/${editingPax.id}`, { method:'PUT', body: JSON.stringify(body) });
+      setEditingPax(null);
+      if (selSlot) await loadSlotPax(selSlot.id);
+      await loadSlots();
+    } catch(err) { setEditPaxError(err.message || 'Failed to update passenger'); }
+    finally { setSavingEdit(false); }
+  };
+
+  /* ── standalone pax: delete ───────────────────────────────────────────── */
   const handlePaxDelete = async id => {
     if (!window.confirm('Remove this passenger?')) return;
+    // If we were editing this passenger, cancel edit
+    if (editingPax?.id === id) setEditingPax(null);
     await api(`/api/passengers/${id}`, { method:'DELETE' });
     if (selSlot) await loadSlotPax(selSlot.id);
     await loadSlots();
@@ -245,7 +298,7 @@ export function EtDashboard() {
           <div className="section-header">
             <div className="section-title">
               <div>
-                <div className="card-title">✈ Trip Groups</div>
+                <div className="card-title">✈ My Trip Groups</div>
                 <div className="card-subtitle">Create and manage transit coordination requests</div>
               </div>
               <span className={`live-dot${liveActive?' active':''}`}><span className="live-dot-circle" /> LIVE</span>
@@ -419,7 +472,7 @@ export function EtDashboard() {
           <div className="section-header" style={{marginBottom:14}}>
             <div>
               <div className="card-title">🚌 Available Vehicles from Alsawan</div>
-              <div className="card-subtitle">Standalone vehicles posted by Alsawan — click to fill with passengers</div>
+              <div className="card-subtitle">Standalone vehicles posted by Alsawan — click to manage passengers</div>
             </div>
           </div>
 
@@ -443,7 +496,20 @@ export function EtDashboard() {
                     <div
                       className={`vehicle-card${slot.status==='FULL'?' full':slot.status==='COMPLETED'?' completed':pct>=80?' near-full':''}`}
                       style={{cursor: isFull ? 'default' : 'pointer', opacity: isFull ? 0.75 : 1}}
-                      onClick={() => { if (!isFull) { setSelSlot(isSelected ? null : slot); setShowPaxForm(false); setPaxForm(EMPTY_PAX); setPaxError(''); }}}
+                      onClick={() => {
+                        if (!isFull) {
+                          if (isSelected) {
+                            setSelSlot(null);
+                          } else {
+                            setSelSlot(slot);
+                          }
+                          setShowPaxForm(false);
+                          setPaxForm(EMPTY_PAX);
+                          setPaxError('');
+                          setEditingPax(null);
+                          setEditPaxError('');
+                        }
+                      }}
                     >
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
                         <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
@@ -454,8 +520,9 @@ export function EtDashboard() {
                               {slot.transit_city}
                             </span>
                           )}
-                          {slot.service_date && <span style={{fontSize:12,color:'var(--text-muted)'}}>📅 {fmtDate(slot.service_date)}</span>}
-                          {slot.per_pax_cost_kwd && <span style={{fontSize:12,color:'var(--et-green-neon)',fontWeight:600}}>{slot.per_pax_cost_kwd} KWD/pax</span>}
+                          {slot.service_date && (
+                            <span style={{fontSize:12,color:'var(--text-muted)'}}>📅 {fmtDate(slot.service_date)}</span>
+                          )}
                         </div>
                         {isFull && <span style={{fontSize:12,color:'var(--text-dim)'}}>Vehicle is {slot.status} — no more passengers can be added</span>}
                       </div>
@@ -491,7 +558,7 @@ export function EtDashboard() {
 
                       {!isFull && (
                         <div style={{marginTop:8,fontSize:12,color:'var(--text-dim)'}}>
-                          {isSelected ? '▲ Click to collapse' : '▼ Click to add passengers'}
+                          {isSelected ? '▲ Click to collapse' : '▼ Click to manage passengers'}
                         </div>
                       )}
                     </div>
@@ -500,15 +567,24 @@ export function EtDashboard() {
                     {isSelected && !isFull && (
                       <div className="sub-section" style={{marginTop:0,borderTop:'none',borderRadius:'0 0 10px 10px',background:'rgba(8,18,9,0.9)'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                          <div className="sub-section-title" style={{margin:0}}>👥 Add Passengers to this Vehicle</div>
+                          <div className="sub-section-title" style={{margin:0}}>👥 Passengers in this Vehicle</div>
                           <button className="button" style={{fontSize:12,padding:'6px 12px'}}
-                            onClick={() => { setShowPaxForm(v => !v); setPaxForm(EMPTY_PAX); setPaxError(''); }}>
+                            onClick={() => {
+                              setShowPaxForm(v => !v);
+                              setPaxForm(EMPTY_PAX);
+                              setPaxError('');
+                              // Cancel any open edit when toggling add form
+                              setEditingPax(null);
+                              setEditPaxError('');
+                            }}>
                             {showPaxForm ? '✕ Cancel' : '+ Add Passenger'}
                           </button>
                         </div>
 
+                        {/* Add passenger form */}
                         {showPaxForm && (
-                          <form onSubmit={handlePaxSubmit} style={{marginBottom:14}}>
+                          <form onSubmit={handlePaxSubmit} style={{marginBottom:14,padding:'12px',background:'rgba(0,255,140,0.04)',borderRadius:8,border:'1px solid rgba(0,255,140,0.1)'}}>
+                            <div style={{fontSize:12,fontWeight:600,color:'var(--et-green-neon)',marginBottom:8}}>New Passenger</div>
                             <div className="form-row">
                               <div className="form-field"><label className="label">Name</label>
                                 <input className="input" value={paxForm.name} onChange={e => setPaxForm(p=>({...p,name:e.target.value}))} placeholder="Passenger name" /></div>
@@ -535,6 +611,7 @@ export function EtDashboard() {
                           </form>
                         )}
 
+                        {/* Passenger list */}
                         {slotPax.length === 0 ? (
                           <div style={{textAlign:'center',padding:'16px',color:'var(--text-dim)',fontSize:13}}>No passengers added yet — click "+ Add Passenger" above</div>
                         ) : (
@@ -542,22 +619,111 @@ export function EtDashboard() {
                             <div style={{overflowX:'auto'}}>
                               <table className="table">
                                 <thead>
-                                  <tr><th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th></th></tr>
+                                  <tr><th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
                                   {slotPax.map(p => (
-                                    <tr key={p.id}>
-                                      <td>{p.name||'—'}</td>
-                                      <td style={{fontFamily:'monospace'}}>{p.pnr||'—'}</td>
-                                      <td style={{fontFamily:'monospace',fontSize:12}}>{p.ticket_number||'—'}</td>
-                                      <td>{p.pax_count}</td>
-                                      <td>{p.bags_count??'—'}</td>
-                                      <td><VisaBadge v={p.visa_status} /></td>
-                                      <td>
-                                        <button className="button secondary" style={{padding:'4px 10px',fontSize:11}}
-                                          onClick={() => handlePaxDelete(p.id)}>Delete</button>
-                                      </td>
-                                    </tr>
+                                    <React.Fragment key={p.id}>
+                                      <tr style={editingPax?.id === p.id ? {background:'rgba(0,255,140,0.05)'} : {}}>
+                                        <td>{p.name||'—'}</td>
+                                        <td style={{fontFamily:'monospace'}}>{p.pnr||'—'}</td>
+                                        <td style={{fontFamily:'monospace',fontSize:12}}>{p.ticket_number||'—'}</td>
+                                        <td>{p.pax_count}</td>
+                                        <td>{p.bags_count??'—'}</td>
+                                        <td><VisaBadge v={p.visa_status} /></td>
+                                        <td>
+                                          <div style={{display:'flex',gap:6}}>
+                                            <button
+                                              className="button ghost"
+                                              style={{padding:'4px 10px',fontSize:11}}
+                                              onClick={() => {
+                                                if (editingPax?.id === p.id) {
+                                                  setEditingPax(null);
+                                                } else {
+                                                  openEditPax(p);
+                                                  setShowPaxForm(false);
+                                                }
+                                              }}>
+                                              {editingPax?.id === p.id ? 'Cancel' : 'Edit'}
+                                            </button>
+                                            <button
+                                              className="button secondary"
+                                              style={{padding:'4px 10px',fontSize:11}}
+                                              onClick={() => handlePaxDelete(p.id)}>
+                                              Delete
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+
+                                      {/* Inline edit form row */}
+                                      {editingPax?.id === p.id && (
+                                        <tr>
+                                          <td colSpan={7} style={{padding:0}}>
+                                            <form
+                                              onSubmit={handleEditPaxSubmit}
+                                              style={{padding:'12px 14px',background:'rgba(0,255,140,0.06)',borderTop:'1px solid rgba(0,255,140,0.15)',borderBottom:'1px solid rgba(0,255,140,0.15)'}}
+                                            >
+                                              <div style={{fontSize:12,fontWeight:600,color:'var(--et-green-neon)',marginBottom:8}}>
+                                                ✏ Editing: {p.name || 'Passenger #' + p.id}
+                                              </div>
+                                              <div className="form-row">
+                                                <div className="form-field">
+                                                  <label className="label">Name</label>
+                                                  <input className="input" value={editPaxForm.name}
+                                                    onChange={e => setEditPaxForm(f=>({...f,name:e.target.value}))}
+                                                    placeholder="Passenger name" />
+                                                </div>
+                                                <div className="form-field">
+                                                  <label className="label">PNR</label>
+                                                  <input className="input" value={editPaxForm.pnr}
+                                                    onChange={e => setEditPaxForm(f=>({...f,pnr:e.target.value}))}
+                                                    placeholder="e.g. ABC123" />
+                                                </div>
+                                                <div className="form-field">
+                                                  <label className="label">Ticket No.</label>
+                                                  <input className="input" value={editPaxForm.ticket_number}
+                                                    onChange={e => setEditPaxForm(f=>({...f,ticket_number:e.target.value}))}
+                                                    placeholder="e.g. 0711234567890" />
+                                                </div>
+                                                <div className="form-field" style={{flex:'0 1 100px'}}>
+                                                  <label className="label">Pax Count</label>
+                                                  <input className="input" type="number" min="1"
+                                                    value={editPaxForm.pax_count}
+                                                    onChange={e => setEditPaxForm(f=>({...f,pax_count:e.target.value}))} />
+                                                </div>
+                                                <div className="form-field" style={{flex:'0 1 100px'}}>
+                                                  <label className="label">Bags</label>
+                                                  <input className="input" type="number" min="0"
+                                                    value={editPaxForm.bags_count}
+                                                    onChange={e => setEditPaxForm(f=>({...f,bags_count:e.target.value}))}
+                                                    placeholder="0" />
+                                                </div>
+                                                <div className="form-field">
+                                                  <label className="label">Visa Status</label>
+                                                  <select className="select" value={editPaxForm.visa_status}
+                                                    onChange={e => setEditPaxForm(f=>({...f,visa_status:e.target.value}))}>
+                                                    <option value="NOT_APPLIED">Not Applied</option>
+                                                    <option value="IN_PROCESS">In Process</option>
+                                                    <option value="APPROVED">Approved</option>
+                                                  </select>
+                                                </div>
+                                              </div>
+                                              {editPaxError && <div className="error-box">⚠ {editPaxError}</div>}
+                                              <div style={{display:'flex',gap:8,marginTop:4}}>
+                                                <button className="button" type="submit" disabled={savingEdit}>
+                                                  {savingEdit ? 'Saving…' : '✓ Save Changes'}
+                                                </button>
+                                                <button type="button" className="button ghost"
+                                                  onClick={() => { setEditingPax(null); setEditPaxError(''); }}>
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </form>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
                                   ))}
                                 </tbody>
                               </table>

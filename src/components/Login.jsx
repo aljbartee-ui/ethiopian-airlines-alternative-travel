@@ -17,7 +17,7 @@ export function Login({ onLogin }) {
       });
       onLogin(data.role);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -37,9 +37,12 @@ export function Login({ onLogin }) {
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
+            autoFocus
           />
           {error && (
-            <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 8 }}>{error}</div>
+            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 10, padding: '8px', background: 'rgba(255,107,107,0.1)', borderRadius: 4 }}>
+              {error}
+            </div>
           )}
           <button className="button" type="submit" disabled={loading || !password}>
             {loading ? 'Checking…' : 'Login'}

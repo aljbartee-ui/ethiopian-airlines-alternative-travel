@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from './api';
+import { api, getStoredRole, setStoredRole } from './api';
 import { Layout } from './components/Layout';
 import { Login } from './components/Login';
 import { EtDashboard } from './components/EtDashboard';
@@ -9,23 +9,25 @@ export default function App() {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadMe() {
-    try {
-      const data = await api('/api/me');
-      setRole(data.role);
-    } catch (e) {
-      setRole(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    loadMe();
+    // On mount, restore role from localStorage immediately (no network call needed)
+    const stored = getStoredRole();
+    setRole(stored);
+    setLoading(false);
   }, []);
 
+  function handleLogin(newRole) {
+    setStoredRole(newRole);
+    setRole(newRole);
+  }
+
   async function handleLogout() {
-    await api('/api/logout', { method: 'POST' });
+    try {
+      await api('/api/logout', { method: 'POST' });
+    } catch (e) {
+      // ignore logout errors
+    }
+    setStoredRole(null);
     setRole(null);
   }
 
@@ -39,7 +41,7 @@ export default function App() {
 
   return (
     <Layout role={role} onLogout={handleLogout}>
-      {!role && <Login onLogin={setRole} />}
+      {!role && <Login onLogin={handleLogin} />}
       {role === 'ET' && <EtDashboard />}
       {role === 'ALSAWAN' && <AlsawanDashboard />}
     </Layout>

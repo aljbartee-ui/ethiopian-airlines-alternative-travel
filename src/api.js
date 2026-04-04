@@ -1,14 +1,35 @@
+// Store the role/token in localStorage so it survives page refreshes
+// and works reliably on all hosting platforms without cookie issues.
+
+const TOKEN_KEY = 'et_alsawan_role';
+
+export function getStoredRole() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredRole(role) {
+  if (role) {
+    localStorage.setItem(TOKEN_KEY, role);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
 export async function api(path, options = {}) {
+  const token = getStoredRole();
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {})
+  };
+
   const res = await fetch(path, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
+    ...options,
+    headers
   });
 
-  // Read the raw text first so we never hit "Unexpected end of JSON input"
+  // Read raw text first to avoid "Unexpected end of JSON input"
   const text = await res.text();
 
   let data = null;
@@ -16,7 +37,6 @@ export async function api(path, options = {}) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      // Server returned non-JSON (e.g. HTML error page)
       if (!res.ok) throw new Error(`Server error (${res.status})`);
       throw new Error('Invalid response from server');
     }

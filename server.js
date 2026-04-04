@@ -1,5 +1,4 @@
 import express from 'express';
-import { createPool } from './src/db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

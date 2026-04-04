@@ -1,11 +1,16 @@
 -- Run this once on your PostgreSQL database.
+-- If you already ran the previous schema, run only the ALTER TABLE statements at the bottom.
+
 CREATE TABLE IF NOT EXISTS trip_groups (
   id SERIAL PRIMARY KEY,
   transit_city VARCHAR(10) NOT NULL,
   transit_date DATE NOT NULL,
-  direction VARCHAR(10) NOT NULL, -- INBOUND / OUTBOUND
+  direction VARCHAR(10) NOT NULL,         -- INBOUND / OUTBOUND
   et_flight_number VARCHAR(20),
   destination VARCHAR(100),
+  requested_pax INTEGER,                  -- Number of passengers requested by ET
+  requester_pnr VARCHAR(20),              -- PNR of the requester
+  requester_ticket VARCHAR(30),           -- Ticket number of the requester
   status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
   demand_note TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
@@ -36,3 +41,8 @@ CREATE TABLE IF NOT EXISTS transport_info (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- ── If you already ran the old schema, run these ALTER statements to add the new columns:
+-- ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requested_pax INTEGER;
+-- ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_pnr VARCHAR(20);
+-- ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_ticket VARCHAR(30);

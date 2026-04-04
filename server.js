@@ -128,12 +128,18 @@ app.get('/api/trip-groups', async (req, res) => {
 });
 
 app.post('/api/trip-groups', requireRole('ET'), async (req, res) => {
-  const { transit_city, transit_date, direction, et_flight_number, destination, status, demand_note } = req.body;
+  const { transit_city, transit_date, direction, et_flight_number, destination,
+          requested_pax, requester_pnr, requester_ticket, status, demand_note } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO trip_groups (transit_city, transit_date, direction, et_flight_number, destination, status, demand_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [transit_city, transit_date, direction, et_flight_number || null, destination || null, status || 'OPEN', demand_note || null]
+      `INSERT INTO trip_groups
+       (transit_city, transit_date, direction, et_flight_number, destination,
+        requested_pax, requester_pnr, requester_ticket, status, demand_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [transit_city, transit_date, direction,
+       et_flight_number || null, destination || null,
+       requested_pax || null, requester_pnr || null, requester_ticket || null,
+       status || 'OPEN', demand_note || null]
     );
     broadcastUpdate('trip-groups-changed', { action: 'created', id: result.rows[0].id });
     res.json(result.rows[0]);
@@ -145,12 +151,17 @@ app.post('/api/trip-groups', requireRole('ET'), async (req, res) => {
 
 app.put('/api/trip-groups/:id', requireRole('ET'), async (req, res) => {
   const id = req.params.id;
-  const { transit_city, transit_date, direction, et_flight_number, destination, status, demand_note } = req.body;
+  const { transit_city, transit_date, direction, et_flight_number, destination,
+          requested_pax, requester_pnr, requester_ticket, status, demand_note } = req.body;
   try {
     const result = await pool.query(
       `UPDATE trip_groups SET transit_city=$1, transit_date=$2, direction=$3, et_flight_number=$4,
-       destination=$5, status=$6, demand_note=$7, updated_at=NOW() WHERE id=$8 RETURNING *`,
-      [transit_city, transit_date, direction, et_flight_number || null, destination || null, status, demand_note || null, id]
+       destination=$5, requested_pax=$6, requester_pnr=$7, requester_ticket=$8,
+       status=$9, demand_note=$10, updated_at=NOW() WHERE id=$11 RETURNING *`,
+      [transit_city, transit_date, direction,
+       et_flight_number || null, destination || null,
+       requested_pax || null, requester_pnr || null, requester_ticket || null,
+       status, demand_note || null, id]
     );
     broadcastUpdate('trip-groups-changed', { action: 'updated', id: Number(id) });
     res.json(result.rows[0]);

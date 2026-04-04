@@ -17,19 +17,22 @@ export function Login({ onLogin }) {
       });
       onLogin(data.role);
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      setError(err.message || 'Invalid password. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: '40px auto' }}>
-      <div className="card">
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Internal Access</h2>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          Enter the shared password for Ethiopian Kuwait or Alsawan Group.
-        </p>
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="login-logo">ET</div>
+        <div className="login-title">Internal Access</div>
+        <div className="login-sub">
+          Ethiopian Airlines Kuwait &amp; Alsawan Group<br />
+          Saudi Transit Coordination Portal
+        </div>
+
         <form onSubmit={handleSubmit}>
           <label className="label">Password</label>
           <input
@@ -37,17 +40,23 @@ export function Login({ onLogin }) {
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
+            placeholder="Enter your team password"
             autoFocus
           />
-          {error && (
-            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 10, padding: '8px', background: 'rgba(255,107,107,0.1)', borderRadius: 4 }}>
-              {error}
-            </div>
-          )}
-          <button className="button" type="submit" disabled={loading || !password}>
-            {loading ? 'Checking…' : 'Login'}
+
+          {error && <div className="error-box">{error}</div>}
+
+          <button className="button" type="submit" disabled={loading || !password}
+            style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: 14 }}>
+            {loading ? 'Verifying…' : 'Login →'}
           </button>
         </form>
+
+        <div style={{ marginTop: 20, padding: '12px', background: 'rgba(52,160,80,0.06)', borderRadius: 8, border: '1px solid rgba(52,160,80,0.15)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
+            Use the password provided by your team administrator
+          </div>
+        </div>
       </div>
     </div>
   );

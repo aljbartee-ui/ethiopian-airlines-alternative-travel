@@ -72,6 +72,7 @@ export function EtDashboard() {
   const [form,         setForm]         = useState(EMPTY_FORM);
   const [saving,       setSaving]       = useState(false);
   const [liveActive,   setLiveActive]   = useState(false);
+  const [sseStatus,    setSseStatus]    = useState('connected'); // 'connected' | 'reconnecting'
   const [error,        setError]        = useState('');
   const [tab,          setTab]          = useState('groups');
 
@@ -125,7 +126,10 @@ export function EtDashboard() {
     ]).then(() => setTimeout(() => setLiveActive(false), 2000));
   }, [loadGroups, loadSlots, loadSlotPax]);
 
-  useSSE({ 'trip-groups-changed': handleLive, 'passengers-changed': handleLive, 'car-slots-changed': handleLive });
+  useSSE(
+    { 'trip-groups-changed': handleLive, 'passengers-changed': handleLive, 'car-slots-changed': handleLive },
+    setSseStatus
+  );
 
   /* ── trip group form ──────────────────────────────────────────────────── */
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -301,7 +305,10 @@ export function EtDashboard() {
                 <div className="card-title">✈ My Trip Groups</div>
                 <div className="card-subtitle">Create and manage transit coordination requests</div>
               </div>
-              <span className={`live-dot${liveActive?' active':''}`}><span className="live-dot-circle" /> LIVE</span>
+              <span className={`live-dot${sseStatus==='reconnecting'?' reconnecting':liveActive?' active':''}`}>
+                <span className="live-dot-circle" />
+                {sseStatus === 'reconnecting' ? 'RECONNECTING…' : 'LIVE'}
+              </span>
             </div>
             <button className="button" onClick={openNew}>+ New Trip Group</button>
           </div>
@@ -523,6 +530,17 @@ export function EtDashboard() {
                           {slot.service_date && (
                             <span style={{fontSize:12,color:'var(--text-muted)'}}>📅 {fmtDate(slot.service_date)}</span>
                           )}
+                        {slot.total_vehicle_price_kwd && (() => {
+                            const perPax = booked > 0 ? (Number(slot.total_vehicle_price_kwd) / booked).toFixed(3) : null;
+                            return (
+                              <span style={{fontSize:12,background:'rgba(245,166,35,0.12)',border:'1px solid rgba(245,166,35,0.35)',borderRadius:4,padding:'2px 8px',color:'var(--et-gold-neon)',fontWeight:700}}>
+                                💰 {perPax ? `${perPax} KWD/pax` : `${Number(slot.total_vehicle_price_kwd).toFixed(3)} KWD total`}
+                              </span>
+                            );
+                          })()}
+                        {!slot.total_vehicle_price_kwd && slot.per_pax_cost_kwd && (
+                            <span style={{fontSize:12,color:'var(--et-green-neon)',fontWeight:600}}>{slot.per_pax_cost_kwd} KWD/pax</span>
+                          )}
                         </div>
                         {isFull && <span style={{fontSize:12,color:'var(--text-dim)'}}>Vehicle is {slot.status} — no more passengers can be added</span>}
                       </div>
@@ -538,6 +556,16 @@ export function EtDashboard() {
                             style={{color:'var(--et-green-neon)',textDecoration:'none'}} onClick={e => e.stopPropagation()}>
                             📌 Pickup location ↗
                           </a>
+                        )}
+                        {slot.total_vehicle_price_kwd && (
+                          <span style={{color:'var(--et-gold-neon)',fontWeight:600}}>
+                            💰 Total: {Number(slot.total_vehicle_price_kwd).toFixed(3)} KWD
+                            {booked > 0 && (
+                              <span style={{color:'var(--et-green-neon)',marginLeft:6}}>
+                                → {(Number(slot.total_vehicle_price_kwd) / booked).toFixed(3)} KWD/pax
+                              </span>
+                            )}
+                          </span>
                         )}
                         {slot.alsawan_note && <span style={{color:'var(--et-gold-neon)'}}>💬 {slot.alsawan_note}</span>}
                       </div>
@@ -728,9 +756,24 @@ export function EtDashboard() {
                                 </tbody>
                               </table>
                             </div>
-                            <div style={{marginTop:10,fontSize:12,color:'var(--text-muted)',display:'flex',gap:20}}>
+                            <div style={{marginTop:10,fontSize:12,color:'var(--text-muted)',display:'flex',gap:20,flexWrap:'wrap',padding:'10px 14px',background:'rgba(0,107,63,0.07)',border:'1px solid rgba(0,255,140,0.1)',borderRadius:8}}>
                               <span>Total pax: <strong style={{color:'var(--text-main)'}}>{slotPax.reduce((s,p)=>s+p.pax_count,0)}</strong></span>
                               <span>Total bags: <strong style={{color:'var(--text-main)'}}>{slotPax.reduce((s,p)=>s+(p.bags_count||0),0)}</strong></span>
+                              {selSlot?.total_vehicle_price_kwd && (() => {
+                                const totalBooked = slotPax.reduce((s,p)=>s+p.pax_count,0);
+                                const totalPrice  = Number(selSlot.total_vehicle_price_kwd);
+                                const perPax      = totalBooked > 0 ? (totalPrice / totalBooked).toFixed(3) : null;
+                                return (
+                                  <>
+                                    <span>Vehicle total: <strong style={{color:'var(--et-gold-neon)'}}>{totalPrice.toFixed(3)} KWD</strong></span>
+                                    {perPax && (
+                                      <span style={{fontWeight:700,color:'var(--et-green-neon)',fontSize:13}}>
+                                        💰 Current price per pax: <strong>{perPax} KWD</strong>
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </>
                         )}

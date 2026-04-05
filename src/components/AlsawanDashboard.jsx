@@ -16,7 +16,8 @@ const AIRPORTS = ['JED','DMM','RUH','MED','GIZ'];
 const EMPTY_CAR = {
   trip_group_id:'', vehicle_type:'BUS', total_seats:'',
   bag_limit_per_pax:'', bag_limit_note:'',
-  per_pax_cost_kwd:'', pickup_location_url:'',
+  per_pax_cost_kwd:'', total_vehicle_price_kwd:'',
+  pickup_location_url:'',
   pickup_time:'', departure_time:'',
   service_date:'', transit_city:'', transit_city_other:'',
   alsawan_note:''
@@ -64,6 +65,7 @@ export function AlsawanDashboard() {
   const [carForm,      setCarForm]      = useState(EMPTY_CAR);
   const [saving,       setSaving]       = useState(false);
   const [liveActive,   setLiveActive]   = useState(false);
+  const [sseStatus,    setSseStatus]    = useState('connected'); // 'connected' | 'reconnecting'
   const [error,        setError]        = useState('');
   const [tab,          setTab]          = useState('groups');   // 'groups' | 'vehicles'
 
@@ -122,11 +124,14 @@ export function AlsawanDashboard() {
     });
   }, [loadGroups, loadSlots, loadSlotPax]);
 
-  useSSE({
-    'trip-groups-changed': handleLive,
-    'passengers-changed':  handleLive,
-    'car-slots-changed':   handleLive
-  });
+  useSSE(
+    {
+      'trip-groups-changed': handleLive,
+      'passengers-changed':  handleLive,
+      'car-slots-changed':   handleLive
+    },
+    setSseStatus
+  );
 
   /* ── car form ─────────────────────────────────────────────────────────── */
   const cf = (k, v) => setCarForm(p => ({ ...p, [k]: v }));
@@ -145,17 +150,18 @@ export function AlsawanDashboard() {
       const city = carForm.transit_city === 'OTHER' ? carForm.transit_city_other : carForm.transit_city;
       const body = {
         ...carForm,
-        transit_city:        city || null,
-        total_seats:         Number(carForm.total_seats),
-        bag_limit_per_pax:   carForm.bag_limit_per_pax   ? Number(carForm.bag_limit_per_pax)   : null,
-        per_pax_cost_kwd:    carForm.per_pax_cost_kwd    ? Number(carForm.per_pax_cost_kwd)    : null,
-        trip_group_id:       carForm.trip_group_id       || null,
-        pickup_location_url: carForm.pickup_location_url || null,
-        pickup_time:         carForm.pickup_time         || null,
-        departure_time:      carForm.departure_time      || null,
-        service_date:        carForm.service_date        || null,
-        bag_limit_note:      carForm.bag_limit_note      || null,
-        alsawan_note:        carForm.alsawan_note        || null,
+        transit_city:             city || null,
+        total_seats:              Number(carForm.total_seats),
+        bag_limit_per_pax:        carForm.bag_limit_per_pax        ? Number(carForm.bag_limit_per_pax)        : null,
+        per_pax_cost_kwd:         carForm.per_pax_cost_kwd         ? Number(carForm.per_pax_cost_kwd)         : null,
+        total_vehicle_price_kwd:  carForm.total_vehicle_price_kwd  ? Number(carForm.total_vehicle_price_kwd)  : null,
+        trip_group_id:            carForm.trip_group_id            || null,
+        pickup_location_url:      carForm.pickup_location_url      || null,
+        pickup_time:              carForm.pickup_time              || null,
+        departure_time:           carForm.departure_time           || null,
+        service_date:             carForm.service_date             || null,
+        bag_limit_note:           carForm.bag_limit_note           || null,
+        alsawan_note:             carForm.alsawan_note             || null,
       };
       if (editCar) {
         await api(`/api/car-slots/${editCar.id}`, { method:'PUT', body: JSON.stringify({ ...body, status: editCar.status || 'OPEN' }) });
@@ -249,7 +255,10 @@ export function AlsawanDashboard() {
               <div className="card-title">🚌 Vehicle Management</div>
               <div className="card-subtitle">Post vehicles linked to a trip group or standalone with a service date</div>
             </div>
-            <span className={`live-dot${liveActive?' active':''}`}><span className="live-dot-circle" /> LIVE</span>
+            <span className={`live-dot${sseStatus==='reconnecting'?' reconnecting':liveActive?' active':''}`}>
+              <span className="live-dot-circle" />
+              {sseStatus === 'reconnecting' ? 'RECONNECTING…' : 'LIVE'}
+            </span>
           </div>
           <button className="button gold" onClick={() => openAddCar('')}>+ Add Vehicle</button>
         </div>
@@ -320,9 +329,9 @@ export function AlsawanDashboard() {
                     onChange={e => cf('total_seats', e.target.value)} required />
                 </div>
                 <div className="form-field">
-                  <label className="label">Cost per Pax (KWD)</label>
-                  <input className="input" type="number" min="0" step="0.001" placeholder="e.g. 3.500"
-                    value={carForm.per_pax_cost_kwd} onChange={e => cf('per_pax_cost_kwd', e.target.value)} />
+                  <label className="label">Total Vehicle Price (KWD)</label>
+                  <input className="input" type="number" min="0" step="0.001" placeholder="e.g. 150.000"
+                    value={carForm.total_vehicle_price_kwd} onChange={e => cf('total_vehicle_price_kwd', e.target.value)} />
                 </div>
               </div>
 
@@ -502,25 +511,35 @@ export function AlsawanDashboard() {
                             <span style={{fontSize:11,background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:4,padding:'2px 8px',color:'var(--et-gold-neon)'}}>Standalone</span>
                           )}
                           {slot.service_date && <span style={{fontSize:12,color:'var(--text-muted)'}}>📅 {fmtDate(slot.service_date)}</span>}
-                          {slot.per_pax_cost_kwd && <span style={{fontSize:12,color:'var(--et-green-neon)',fontWeight:600}}>{slot.per_pax_cost_kwd} KWD/pax</span>}
+                          {slot.total_vehicle_price_kwd && (() => {
+                            const perPax = booked > 0 ? (Number(slot.total_vehicle_price_kwd) / booked).toFixed(3) : null;
+                            return (
+                              <span style={{fontSize:12,color:'var(--et-gold-neon)',fontWeight:600}}>
+                                💰 {Number(slot.total_vehicle_price_kwd).toFixed(3)} KWD total
+                                {perPax && <span style={{color:'var(--et-green-neon)',marginLeft:6}}>({perPax} KWD/pax)</span>}
+                              </span>
+                            );
+                          })()}
+                          {!slot.total_vehicle_price_kwd && slot.per_pax_cost_kwd && <span style={{fontSize:12,color:'var(--et-green-neon)',fontWeight:600}}>{slot.per_pax_cost_kwd} KWD/pax</span>}
                         </div>
                         <div style={{display:'flex',gap:6}} onClick={e => e.stopPropagation()}>
                           <button className="button ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={() => {
                             setEditCar(slot);
                             setCarForm({
-                              trip_group_id: slot.trip_group_id || '',
-                              vehicle_type: slot.vehicle_type || 'BUS',
-                              total_seats: slot.total_seats || '',
-                              bag_limit_per_pax: slot.bag_limit_per_pax || '',
-                              bag_limit_note: slot.bag_limit_note || '',
-                              per_pax_cost_kwd: slot.per_pax_cost_kwd || '',
-                              pickup_location_url: slot.pickup_location_url || '',
-                              pickup_time: slot.pickup_time ? slot.pickup_time.slice(0,5) : '',
-                              departure_time: slot.departure_time ? slot.departure_time.slice(0,5) : '',
-                              service_date: slot.service_date ? slot.service_date.slice(0,10) : '',
-                              transit_city: AIRPORTS.includes(slot.transit_city) ? slot.transit_city : (slot.transit_city ? 'OTHER' : ''),
-                              transit_city_other: AIRPORTS.includes(slot.transit_city) ? '' : (slot.transit_city || ''),
-                              alsawan_note: slot.alsawan_note || '',
+                              trip_group_id:           slot.trip_group_id || '',
+                              vehicle_type:            slot.vehicle_type || 'BUS',
+                              total_seats:             slot.total_seats || '',
+                              bag_limit_per_pax:       slot.bag_limit_per_pax || '',
+                              bag_limit_note:          slot.bag_limit_note || '',
+                              per_pax_cost_kwd:        slot.per_pax_cost_kwd || '',
+                              total_vehicle_price_kwd: slot.total_vehicle_price_kwd || '',
+                              pickup_location_url:     slot.pickup_location_url || '',
+                              pickup_time:             slot.pickup_time ? slot.pickup_time.slice(0,5) : '',
+                              departure_time:          slot.departure_time ? slot.departure_time.slice(0,5) : '',
+                              service_date:            slot.service_date ? slot.service_date.slice(0,10) : '',
+                              transit_city:            AIRPORTS.includes(slot.transit_city) ? slot.transit_city : (slot.transit_city ? 'OTHER' : ''),
+                              transit_city_other:      AIRPORTS.includes(slot.transit_city) ? '' : (slot.transit_city || ''),
+                              alsawan_note:            slot.alsawan_note || '',
                             });
                             setShowCarForm(true); setError('');
                           }}>✏ Edit</button>

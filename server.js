@@ -70,8 +70,9 @@ async function runMigrations() {
         created_at          TIMESTAMP DEFAULT NOW(),
         updated_at          TIMESTAMP DEFAULT NOW()
       );
-      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS service_date  DATE;
-      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS transit_city  VARCHAR(20);
+      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS service_date           DATE;
+      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS transit_city           VARCHAR(20);
+      ALTER TABLE car_slots ADD COLUMN IF NOT EXISTS total_vehicle_price_kwd NUMERIC(10,3);
       ALTER TABLE car_slots ALTER COLUMN trip_group_id DROP NOT NULL;
 
       -- Passengers — both trip-group passengers AND standalone vehicle passengers
@@ -316,7 +317,8 @@ app.get('/api/trip-groups/:id/car-slots', requireRole(), async (req, res) => {
 app.post('/api/trip-groups/:id/car-slots', requireRole('ALSAWAN'), async (req, res) => {
   const {
     vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
+    per_pax_cost_kwd, total_vehicle_price_kwd,
+    pickup_location_url, pickup_time, departure_time,
     service_date, transit_city, alsawan_note
   } = req.body;
   try {
@@ -328,11 +330,12 @@ app.post('/api/trip-groups/:id/car-slots', requireRole('ALSAWAN'), async (req, r
     const result = await pool.query(
       `INSERT INTO car_slots
        (trip_group_id, transit_city, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-        per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        per_pax_cost_kwd, total_vehicle_price_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [req.params.id, transit_city || null, vehicle_type, total_seats,
        bag_limit_per_pax || null, bag_limit_note || null,
-       per_pax_cost_kwd || null, pickup_location_url || null,
+       per_pax_cost_kwd || null, total_vehicle_price_kwd || null,
+       pickup_location_url || null,
        pickup_time || null, departure_time || null,
        date, alsawan_note || null]
     );
@@ -348,18 +351,20 @@ app.post('/api/trip-groups/:id/car-slots', requireRole('ALSAWAN'), async (req, r
 app.post('/api/car-slots', requireRole('ALSAWAN'), async (req, res) => {
   const {
     trip_group_id, transit_city, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
+    per_pax_cost_kwd, total_vehicle_price_kwd,
+    pickup_location_url, pickup_time, departure_time,
     service_date, alsawan_note
   } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO car_slots
        (trip_group_id, transit_city, vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-        per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        per_pax_cost_kwd, total_vehicle_price_kwd, pickup_location_url, pickup_time, departure_time, service_date, alsawan_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [trip_group_id || null, transit_city || null, vehicle_type, total_seats,
        bag_limit_per_pax || null, bag_limit_note || null,
-       per_pax_cost_kwd || null, pickup_location_url || null,
+       per_pax_cost_kwd || null, total_vehicle_price_kwd || null,
+       pickup_location_url || null,
        pickup_time || null, departure_time || null,
        service_date || null, alsawan_note || null]
     );
@@ -375,19 +380,22 @@ app.put('/api/car-slots/:id', requireRole('ALSAWAN'), async (req, res) => {
   const id = req.params.id;
   const {
     vehicle_type, total_seats, bag_limit_per_pax, bag_limit_note,
-    per_pax_cost_kwd, pickup_location_url, pickup_time, departure_time,
+    per_pax_cost_kwd, total_vehicle_price_kwd,
+    pickup_location_url, pickup_time, departure_time,
     service_date, transit_city, status, alsawan_note
   } = req.body;
   try {
     const result = await pool.query(
       `UPDATE car_slots SET
         vehicle_type=$1, total_seats=$2, bag_limit_per_pax=$3, bag_limit_note=$4,
-        per_pax_cost_kwd=$5, pickup_location_url=$6, pickup_time=$7, departure_time=$8,
-        service_date=$9, transit_city=$10, status=$11, alsawan_note=$12, updated_at=NOW()
-       WHERE id=$13 RETURNING *`,
+        per_pax_cost_kwd=$5, total_vehicle_price_kwd=$6,
+        pickup_location_url=$7, pickup_time=$8, departure_time=$9,
+        service_date=$10, transit_city=$11, status=$12, alsawan_note=$13, updated_at=NOW()
+       WHERE id=$14 RETURNING *`,
       [vehicle_type, total_seats,
        bag_limit_per_pax || null, bag_limit_note || null,
-       per_pax_cost_kwd || null, pickup_location_url || null,
+       per_pax_cost_kwd || null, total_vehicle_price_kwd || null,
+       pickup_location_url || null,
        pickup_time || null, departure_time || null,
        service_date || null, transit_city || null,
        status || 'OPEN', alsawan_note || null, id]

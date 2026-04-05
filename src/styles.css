@@ -214,6 +214,15 @@ body {
   0%,100% { transform:scale(1); opacity:1; }
   50% { transform:scale(1.45); opacity:0.65; }
 }
+.live-dot.reconnecting { color: var(--warning); }
+.live-dot.reconnecting .live-dot-circle {
+  background: var(--warning); box-shadow: 0 0 8px var(--warning);
+  animation: reconnect-blink 0.7s ease-in-out infinite;
+}
+@keyframes reconnect-blink {
+  0%,100% { opacity:1; transform:scale(1); }
+  50% { opacity:0.25; transform:scale(0.7); }
+}
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .button {

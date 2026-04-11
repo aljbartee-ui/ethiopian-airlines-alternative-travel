@@ -8,6 +8,8 @@ const EMPTY_SLOT = {
   bag_limit_per_pax: '',
   bag_limit_note: '',
   per_pax_cost_kwd: '',
+  total_vehicle_price_kwd: '',
+  pricing_mode: 'per_pax',
   pickup_location_url: '',
   pickup_time: '',
   departure_time: '',
@@ -113,12 +115,14 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
         ...slotForm,
         total_seats: Number(slotForm.total_seats),
         bag_limit_per_pax: slotForm.bag_limit_per_pax ? Number(slotForm.bag_limit_per_pax) : null,
-        per_pax_cost_kwd: slotForm.per_pax_cost_kwd ? Number(slotForm.per_pax_cost_kwd) : null,
+        per_pax_cost_kwd: slotForm.pricing_mode === 'per_pax' && slotForm.per_pax_cost_kwd ? Number(slotForm.per_pax_cost_kwd) : null,
+        total_vehicle_price_kwd: slotForm.pricing_mode === 'total' && slotForm.total_vehicle_price_kwd ? Number(slotForm.total_vehicle_price_kwd) : null,
         pickup_location_url: slotForm.pickup_location_url || null,
         pickup_time: slotForm.pickup_time || null,
         departure_time: slotForm.departure_time || null,
         alsawan_note: slotForm.alsawan_note || null
       };
+      delete payload.pricing_mode;
       if (editingSlot) {
         await api(`/api/car-slots/${editingSlot.id}`, { method: 'PUT', body: JSON.stringify({ ...payload, status: editingSlot.status || 'OPEN' }) });
       } else {
@@ -254,7 +258,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
           <div className="sub-section-title" style={{ margin: 0 }}>🚌 Available Vehicles (Alsawan)</div>
           {role === 'ALSAWAN' && (
             <button className="button" style={{ fontSize: 12, padding: '6px 12px' }}
-              onClick={() => { setShowSlotForm(v => !v); setEditingSlot(null); setSlotForm(EMPTY_SLOT); setSlotError(''); }}>
+              onClick={() => { setShowSlotForm(v => !v); setEditingSlot(null); setSlotForm({ ...EMPTY_SLOT }); setSlotError(''); }}>
               {showSlotForm ? '✕ Cancel' : '+ Add Vehicle'}
             </button>
           )}
@@ -285,9 +289,28 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                 <label className="label">Bag Limit Note</label>
                 <input className="input" name="bag_limit_note" value={slotForm.bag_limit_note} onChange={handleSlotChange} placeholder="e.g. 2PC 23kg + 7kg hand" />
               </div>
-              <div className="form-field" style={{ flex: '0 1 150px' }}>
-                <label className="label">Per-Pax Cost (KWD)</label>
-                <input className="input" name="per_pax_cost_kwd" value={slotForm.per_pax_cost_kwd} onChange={handleSlotChange} placeholder="e.g. 12.500" />
+              <div className="form-field" style={{ flex: '0 1 170px' }}>
+                <label className="label">Payment Type</label>
+                <select className="select" value={slotForm.pricing_mode} onChange={e => {
+                  const mode = e.target.value;
+                  setSlotForm(p => ({ ...p, pricing_mode: mode, per_pax_cost_kwd: '', total_vehicle_price_kwd: '' }));
+                }}>
+                  <option value="per_pax">Cost per Pax</option>
+                  <option value="total">Total Needed Payment</option>
+                </select>
+              </div>
+              <div className="form-field" style={{ flex: '0 1 170px' }}>
+                {slotForm.pricing_mode === 'per_pax' ? (
+                  <>
+                    <label className="label">Cost per Pax (KWD)</label>
+                    <input className="input" name="per_pax_cost_kwd" value={slotForm.per_pax_cost_kwd} onChange={handleSlotChange} placeholder="e.g. 12.500" />
+                  </>
+                ) : (
+                  <>
+                    <label className="label">Total Payment (KWD)</label>
+                    <input className="input" name="total_vehicle_price_kwd" value={slotForm.total_vehicle_price_kwd} onChange={handleSlotChange} placeholder="e.g. 150.000" />
+                  </>
+                )}
               </div>
             </div>
             <div className="form-row">
@@ -330,7 +353,17 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {slot.booked_pax}/{slot.total_seats} seats filled
                     </span>
-                    {slot.per_pax_cost_kwd && (
+                    {slot.total_vehicle_price_kwd && (() => {
+                      const booked = Number(slot.booked_pax || 0);
+                      const perPax = booked > 0 ? (Number(slot.total_vehicle_price_kwd) / booked).toFixed(3) : null;
+                      return (
+                        <span style={{ fontSize: 12, color: 'var(--et-gold-neon, var(--green-300))', fontWeight: 600 }}>
+                          💰 {Number(slot.total_vehicle_price_kwd).toFixed(3)} KWD total
+                          {perPax && <span style={{ color: 'var(--et-green-neon, var(--green-300))', marginLeft: 6 }}>({perPax} KWD/pax)</span>}
+                        </span>
+                      );
+                    })()}
+                    {!slot.total_vehicle_price_kwd && slot.per_pax_cost_kwd && (
                       <span style={{ fontSize: 12, color: 'var(--green-300)', fontWeight: 600 }}>
                         {slot.per_pax_cost_kwd} KWD/pax
                       </span>
@@ -347,6 +380,8 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                             bag_limit_per_pax: slot.bag_limit_per_pax || '',
                             bag_limit_note: slot.bag_limit_note || '',
                             per_pax_cost_kwd: slot.per_pax_cost_kwd || '',
+                            total_vehicle_price_kwd: slot.total_vehicle_price_kwd || '',
+                            pricing_mode: slot.total_vehicle_price_kwd ? 'total' : 'per_pax',
                             pickup_location_url: slot.pickup_location_url || '',
                             pickup_time: slot.pickup_time || '',
                             departure_time: slot.departure_time || '',
@@ -460,7 +495,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                 {carSlots.map(s => (
                   <option key={s.id} value={s.id} disabled={s.status === 'FULL' || s.status === 'CANCELLED'}>
                     {s.vehicle_type} — {s.remaining_seats} seats left
-                    {s.per_pax_cost_kwd ? ` · ${s.per_pax_cost_kwd} KWD/pax` : ''}
+                    {s.total_vehicle_price_kwd ? ` · ${Number(s.total_vehicle_price_kwd).toFixed(3)} KWD total` : (s.per_pax_cost_kwd ? ` · ${s.per_pax_cost_kwd} KWD/pax` : '')}
                     {s.status !== 'OPEN' ? ` [${s.status}]` : ''}
                   </option>
                 ))}

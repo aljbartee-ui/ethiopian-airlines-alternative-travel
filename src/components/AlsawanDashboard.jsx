@@ -17,6 +17,7 @@ const EMPTY_CAR = {
   trip_group_id:'', vehicle_type:'BUS', total_seats:'',
   bag_limit_per_pax:'', bag_limit_note:'',
   per_pax_cost_kwd:'', total_vehicle_price_kwd:'',
+  pricing_mode:'per_pax',
   pickup_location_url:'',
   pickup_time:'', departure_time:'',
   service_date:'', transit_city:'', transit_city_other:'',
@@ -153,8 +154,8 @@ export function AlsawanDashboard() {
         transit_city:             city || null,
         total_seats:              Number(carForm.total_seats),
         bag_limit_per_pax:        carForm.bag_limit_per_pax        ? Number(carForm.bag_limit_per_pax)        : null,
-        per_pax_cost_kwd:         carForm.per_pax_cost_kwd         ? Number(carForm.per_pax_cost_kwd)         : null,
-        total_vehicle_price_kwd:  carForm.total_vehicle_price_kwd  ? Number(carForm.total_vehicle_price_kwd)  : null,
+        per_pax_cost_kwd:         carForm.pricing_mode === 'per_pax' && carForm.per_pax_cost_kwd  ? Number(carForm.per_pax_cost_kwd)  : null,
+        total_vehicle_price_kwd:  carForm.pricing_mode === 'total'  && carForm.total_vehicle_price_kwd ? Number(carForm.total_vehicle_price_kwd) : null,
         trip_group_id:            carForm.trip_group_id            || null,
         pickup_location_url:      carForm.pickup_location_url      || null,
         pickup_time:              carForm.pickup_time              || null,
@@ -163,6 +164,7 @@ export function AlsawanDashboard() {
         bag_limit_note:           carForm.bag_limit_note           || null,
         alsawan_note:             carForm.alsawan_note             || null,
       };
+      delete body.pricing_mode;
       if (editCar) {
         await api(`/api/car-slots/${editCar.id}`, { method:'PUT', body: JSON.stringify({ ...body, status: editCar.status || 'OPEN' }) });
       } else if (body.trip_group_id) {
@@ -329,9 +331,29 @@ export function AlsawanDashboard() {
                     onChange={e => cf('total_seats', e.target.value)} required />
                 </div>
                 <div className="form-field">
-                  <label className="label">Total Vehicle Price (KWD)</label>
-                  <input className="input" type="number" min="0" step="0.001" placeholder="e.g. 150.000"
-                    value={carForm.total_vehicle_price_kwd} onChange={e => cf('total_vehicle_price_kwd', e.target.value)} />
+                  <label className="label">Payment Type</label>
+                  <select className="select" value={carForm.pricing_mode} onChange={e => {
+                    const mode = e.target.value;
+                    setCarForm(p => ({ ...p, pricing_mode: mode, per_pax_cost_kwd: '', total_vehicle_price_kwd: '' }));
+                  }}>
+                    <option value="per_pax">Cost per Pax</option>
+                    <option value="total">Total Needed Payment</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  {carForm.pricing_mode === 'per_pax' ? (
+                    <>
+                      <label className="label">Cost per Pax (KWD)</label>
+                      <input className="input" type="number" min="0" step="0.001" placeholder="e.g. 12.500"
+                        value={carForm.per_pax_cost_kwd} onChange={e => cf('per_pax_cost_kwd', e.target.value)} />
+                    </>
+                  ) : (
+                    <>
+                      <label className="label">Total Needed Payment (KWD)</label>
+                      <input className="input" type="number" min="0" step="0.001" placeholder="e.g. 150.000"
+                        value={carForm.total_vehicle_price_kwd} onChange={e => cf('total_vehicle_price_kwd', e.target.value)} />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -533,6 +555,7 @@ export function AlsawanDashboard() {
                               bag_limit_note:          slot.bag_limit_note || '',
                               per_pax_cost_kwd:        slot.per_pax_cost_kwd || '',
                               total_vehicle_price_kwd: slot.total_vehicle_price_kwd || '',
+                              pricing_mode:            slot.total_vehicle_price_kwd ? 'total' : 'per_pax',
                               pickup_location_url:     slot.pickup_location_url || '',
                               pickup_time:             slot.pickup_time ? slot.pickup_time.slice(0,5) : '',
                               departure_time:          slot.departure_time ? slot.departure_time.slice(0,5) : '',

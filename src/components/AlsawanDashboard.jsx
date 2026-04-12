@@ -55,6 +55,16 @@ function VisaBadge({ v }) {
   return <span className={cls}>{label}</span>;
 }
 
+function PaymentBadge({ s }) {
+  const map = {
+    PAID:                ['badge badge-confirmed',  '✓ Paid'],
+    ADVISED_TO_PAY:      ['badge badge-open',       '⚠ Advised to Pay'],
+    AWAITING_FINAL_COST: ['badge badge-collecting', '⏳ Awaiting Final Cost'],
+  };
+  const [cls, label] = map[s] || map.AWAITING_FINAL_COST;
+  return <span className={cls}>{label}</span>;
+}
+
 /* ── main component ──────────────────────────────────────────────────────── */
 export function AlsawanDashboard() {
   const [groups,       setGroups]       = useState([]);
@@ -642,6 +652,7 @@ export function AlsawanDashboard() {
                                     <th>Pax</th>
                                     <th>Bags</th>
                                     <th>Visa</th>
+                                    <th>Payment</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -654,6 +665,7 @@ export function AlsawanDashboard() {
                                       <td style={{fontWeight:700,color:'var(--et-gold-neon)'}}>{p.pax_count}</td>
                                       <td>{p.bags_count != null ? p.bags_count : '—'}</td>
                                       <td><VisaBadge v={p.visa_status} /></td>
+                                      <td><PaymentBadge s={p.payment_status} /></td>
                                     </tr>
                                   ))}
                                 </tbody>

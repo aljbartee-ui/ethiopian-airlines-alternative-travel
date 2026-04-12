@@ -87,10 +87,12 @@ async function runMigrations() {
         pax_count      INTEGER NOT NULL DEFAULT 1,
         bags_count     INTEGER,
         visa_status    VARCHAR(20) DEFAULT 'NOT_APPLIED',
+        payment_status VARCHAR(30) DEFAULT 'AWAITING_FINAL_COST',
         created_at     TIMESTAMP DEFAULT NOW(),
         updated_at     TIMESTAMP DEFAULT NOW()
       );
       ALTER TABLE passengers ADD COLUMN IF NOT EXISTS car_slot_id INTEGER REFERENCES car_slots(id) ON DELETE SET NULL;
+      ALTER TABLE passengers ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'AWAITING_FINAL_COST';
       -- Make trip_group_id nullable for standalone passengers
       ALTER TABLE passengers ALTER COLUMN trip_group_id DROP NOT NULL;
 
@@ -461,7 +463,7 @@ app.get('/api/car-slots/:id/passengers', requireRole(), async (req, res) => {
 });
 
 // Helper: check capacity and auto-mark full
-async function checkAndInsertPassenger(client, { trip_group_id, car_slot_id, name, pnr, ticket_number, pax_count, bags_count, visa_status }) {
+async function checkAndInsertPassenger(client, { trip_group_id, car_slot_id, name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status }) {
   if (car_slot_id) {
     const capacityCheck = await client.query(`
       SELECT cs.total_seats, cs.bag_limit_per_pax, cs.status,
@@ -493,25 +495,26 @@ async function checkAndInsertPassenger(client, { trip_group_id, car_slot_id, nam
   }
 
   const result = await client.query(
-    `INSERT INTO passengers (trip_group_id, car_slot_id, name, pnr, ticket_number, pax_count, bags_count, visa_status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    `INSERT INTO passengers (trip_group_id, car_slot_id, name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [trip_group_id || null, car_slot_id || null,
      name || null, pnr || null, ticket_number || null,
-     pax_count || 1, bags_count || null, visa_status || 'NOT_APPLIED']
+     pax_count || 1, bags_count || null, visa_status || 'NOT_APPLIED',
+     payment_status || 'AWAITING_FINAL_COST']
   );
   return result.rows[0];
 }
 
 // POST passenger to a trip group (ET adds pax to a trip-group, optionally assigned to a car slot)
 app.post('/api/trip-groups/:id/passengers', requireRole('ET'), async (req, res) => {
-  const { name, pnr, ticket_number, pax_count, bags_count, visa_status, car_slot_id } = req.body;
+  const { name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status, car_slot_id } = req.body;
   const tripGroupId = Number(req.params.id);
   const client = await pool.connect();
   try {
     const pax = await checkAndInsertPassenger(client, {
       trip_group_id: tripGroupId,
       car_slot_id: car_slot_id || null,
-      name, pnr, ticket_number, pax_count, bags_count, visa_status
+      name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status
     });
     broadcastUpdate('passengers-changed', { trip_group_id: tripGroupId, car_slot_id: car_slot_id || null, action: 'created' });
     if (car_slot_id) broadcastUpdate('car-slots-changed', { trip_group_id: tripGroupId, slot_id: Number(car_slot_id), action: 'passenger-added' });
@@ -527,13 +530,13 @@ app.post('/api/trip-groups/:id/passengers', requireRole('ET'), async (req, res) 
 // POST passenger to a standalone car slot (ET adds pax directly to Alsawan's standalone vehicle)
 app.post('/api/car-slots/:id/passengers', requireRole('ET'), async (req, res) => {
   const slotId = Number(req.params.id);
-  const { name, pnr, ticket_number, pax_count, bags_count, visa_status } = req.body;
+  const { name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status } = req.body;
   const client = await pool.connect();
   try {
     const pax = await checkAndInsertPassenger(client, {
       trip_group_id: null,  // standalone — no trip group
       car_slot_id: slotId,
-      name, pnr, ticket_number, pax_count, bags_count, visa_status
+      name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status
     });
     broadcastUpdate('passengers-changed', { car_slot_id: slotId, action: 'created' });
     broadcastUpdate('car-slots-changed', { slot_id: slotId, action: 'passenger-added' });
@@ -547,14 +550,15 @@ app.post('/api/car-slots/:id/passengers', requireRole('ET'), async (req, res) =>
 });
 
 app.put('/api/passengers/:id', requireRole('ET'), async (req, res) => {
-  const { name, pnr, ticket_number, pax_count, bags_count, visa_status, car_slot_id } = req.body;
+  const { name, pnr, ticket_number, pax_count, bags_count, visa_status, payment_status, car_slot_id } = req.body;
   try {
     const result = await pool.query(
       `UPDATE passengers SET name=$1, pnr=$2, ticket_number=$3, pax_count=$4,
-       bags_count=$5, visa_status=$6, car_slot_id=$7, updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
+       bags_count=$5, visa_status=$6, payment_status=$7, car_slot_id=$8, updated_at=NOW()
+       WHERE id=$9 RETURNING *`,
       [name || null, pnr || null, ticket_number || null, pax_count || 1,
-       bags_count || null, visa_status || 'NOT_APPLIED', car_slot_id || null, req.params.id]
+       bags_count || null, visa_status || 'NOT_APPLIED',
+       payment_status || 'AWAITING_FINAL_COST', car_slot_id || null, req.params.id]
     );
     const p = result.rows[0];
     broadcastUpdate('passengers-changed', { trip_group_id: p.trip_group_id, car_slot_id: p.car_slot_id, action: 'updated' });

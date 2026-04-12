@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS passengers (
   pax_count       INTEGER NOT NULL DEFAULT 1,
   bags_count      INTEGER,
   visa_status     VARCHAR(20) DEFAULT 'NOT_APPLIED',
+  payment_status  VARCHAR(30) DEFAULT 'AWAITING_FINAL_COST',           -- PAID / ADVISED_TO_PAY / AWAITING_FINAL_COST
   created_at      TIMESTAMP DEFAULT NOW(),
   updated_at      TIMESTAMP DEFAULT NOW()
 );
@@ -68,5 +69,6 @@ CREATE TABLE IF NOT EXISTS passengers (
 -- ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_pnr VARCHAR(20);
 -- ALTER TABLE trip_groups ADD COLUMN IF NOT EXISTS requester_ticket VARCHAR(30);
 -- ALTER TABLE passengers  ADD COLUMN IF NOT EXISTS car_slot_id INTEGER REFERENCES car_slots(id) ON DELETE SET NULL;
+-- ALTER TABLE passengers  ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'AWAITING_FINAL_COST';
 -- DROP TABLE IF EXISTS transport_info;  -- replaced by car_slots
 -- CREATE TABLE IF NOT EXISTS car_slots ( ... );  -- see above

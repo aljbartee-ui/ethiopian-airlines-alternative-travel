@@ -36,7 +36,7 @@ const EMPTY_FORM = {
   status: 'OPEN', demand_note: ''
 };
 
-const EMPTY_PAX = { name:'', pnr:'', ticket_number:'', pax_count:1, bags_count:'', visa_status:'NOT_APPLIED' };
+const EMPTY_PAX = { name:'', pnr:'', ticket_number:'', pax_count:1, bags_count:'', visa_status:'NOT_APPLIED', payment_status:'AWAITING_FINAL_COST' };
 
 function StatusBadge({ s }) {
   const map = {
@@ -58,6 +58,16 @@ function VisaBadge({ v }) {
     APPROVED:    ['badge badge-confirmed', 'Approved'],
   };
   const [cls, label] = map[v] || map.NOT_APPLIED;
+  return <span className={cls}>{label}</span>;
+}
+
+function PaymentBadge({ s }) {
+  const map = {
+    PAID:                ['badge badge-confirmed',  '✓ Paid'],
+    ADVISED_TO_PAY:      ['badge badge-open',       '⚠ Advised to Pay'],
+    AWAITING_FINAL_COST: ['badge badge-collecting', '⏳ Awaiting Final Cost'],
+  };
+  const [cls, label] = map[s] || map.AWAITING_FINAL_COST;
   return <span className={cls}>{label}</span>;
 }
 
@@ -214,12 +224,13 @@ export function EtDashboard() {
   const openEditPax = pax => {
     setEditingPax(pax);
     setEditPaxForm({
-      name:          pax.name          || '',
-      pnr:           pax.pnr           || '',
-      ticket_number: pax.ticket_number || '',
-      pax_count:     pax.pax_count     || 1,
-      bags_count:    pax.bags_count    != null ? pax.bags_count : '',
-      visa_status:   pax.visa_status   || 'NOT_APPLIED',
+      name:           pax.name           || '',
+      pnr:            pax.pnr            || '',
+      ticket_number:  pax.ticket_number  || '',
+      pax_count:      pax.pax_count      || 1,
+      bags_count:     pax.bags_count     != null ? pax.bags_count : '',
+      visa_status:    pax.visa_status    || 'NOT_APPLIED',
+      payment_status: pax.payment_status || 'AWAITING_FINAL_COST',
     });
     setEditPaxError('');
     // Close add form if open
@@ -630,6 +641,12 @@ export function EtDashboard() {
                                   <option value="IN_PROCESS">In Process</option>
                                   <option value="APPROVED">Approved</option>
                                 </select></div>
+                              <div className="form-field"><label className="label">Payment Status</label>
+                                <select className="select" value={paxForm.payment_status} onChange={e => setPaxForm(p=>({...p,payment_status:e.target.value}))}>
+                                  <option value="AWAITING_FINAL_COST">Awaiting Final Cost</option>
+                                  <option value="ADVISED_TO_PAY">Advised to Pay</option>
+                                  <option value="PAID">Paid</option>
+                                </select></div>
                             </div>
                             {paxError && <div className="error-box">⚠ {paxError}</div>}
                             <div style={{display:'flex',gap:8}}>
@@ -647,7 +664,7 @@ export function EtDashboard() {
                             <div style={{overflowX:'auto'}}>
                               <table className="table">
                                 <thead>
-                                  <tr><th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th>Actions</th></tr>
+                                  <tr><th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th>Payment</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
                                   {slotPax.map(p => (
@@ -659,6 +676,7 @@ export function EtDashboard() {
                                         <td>{p.pax_count}</td>
                                         <td>{p.bags_count??'—'}</td>
                                         <td><VisaBadge v={p.visa_status} /></td>
+                                        <td><PaymentBadge s={p.payment_status} /></td>
                                         <td>
                                           <div style={{display:'flex',gap:6}}>
                                             <button
@@ -687,7 +705,7 @@ export function EtDashboard() {
                                       {/* Inline edit form row */}
                                       {editingPax?.id === p.id && (
                                         <tr>
-                                          <td colSpan={7} style={{padding:0}}>
+                                          <td colSpan={8} style={{padding:0}}>
                                             <form
                                               onSubmit={handleEditPaxSubmit}
                                               style={{padding:'12px 14px',background:'rgba(0,255,140,0.06)',borderTop:'1px solid rgba(0,255,140,0.15)',borderBottom:'1px solid rgba(0,255,140,0.15)'}}
@@ -734,6 +752,15 @@ export function EtDashboard() {
                                                     <option value="NOT_APPLIED">Not Applied</option>
                                                     <option value="IN_PROCESS">In Process</option>
                                                     <option value="APPROVED">Approved</option>
+                                                  </select>
+                                                </div>
+                                                <div className="form-field">
+                                                  <label className="label">Payment Status</label>
+                                                  <select className="select" value={editPaxForm.payment_status}
+                                                    onChange={e => setEditPaxForm(f=>({...f,payment_status:e.target.value}))}>
+                                                    <option value="AWAITING_FINAL_COST">Awaiting Final Cost</option>
+                                                    <option value="ADVISED_TO_PAY">Advised to Pay</option>
+                                                    <option value="PAID">Paid</option>
                                                   </select>
                                                 </div>
                                               </div>

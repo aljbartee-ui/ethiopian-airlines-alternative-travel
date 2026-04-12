@@ -18,7 +18,8 @@ const EMPTY_SLOT = {
 
 const EMPTY_PAX = {
   name: '', pnr: '', ticket_number: '',
-  pax_count: 1, bags_count: '', visa_status: 'NOT_APPLIED', car_slot_id: ''
+  pax_count: 1, bags_count: '', visa_status: 'NOT_APPLIED',
+  payment_status: 'AWAITING_FINAL_COST', car_slot_id: ''
 };
 
 function slotStatusBadge(s) {
@@ -47,6 +48,16 @@ function visaBadge(v) {
     APPROVED:    { cls: 'badge badge-confirmed',   label: 'Approved' },
   };
   const b = map[v] || map.NOT_APPLIED;
+  return <span className={b.cls}>{b.label}</span>;
+}
+
+function paymentBadge(s) {
+  const map = {
+    PAID:                { cls: 'badge badge-confirmed',  label: '✓ Paid' },
+    ADVISED_TO_PAY:      { cls: 'badge badge-open',       label: '⚠ Advised to Pay' },
+    AWAITING_FINAL_COST: { cls: 'badge badge-collecting', label: '⏳ Awaiting Final Cost' },
+  };
+  const b = map[s] || map.AWAITING_FINAL_COST;
   return <span className={b.cls}>{b.label}</span>;
 }
 
@@ -486,6 +497,14 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                     <option value="APPROVED">Approved</option>
                   </select>
                 </div>
+                <div className="form-field">
+                  <label className="label">Payment Status</label>
+                  <select className="select" name="payment_status" value={paxForm.payment_status} onChange={handlePaxChange}>
+                    <option value="AWAITING_FINAL_COST">Awaiting Final Cost</option>
+                    <option value="ADVISED_TO_PAY">Advised to Pay</option>
+                    <option value="PAID">Paid</option>
+                  </select>
+                </div>
               </div>
 
               {/* Assign to car slot */}
@@ -524,7 +543,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th>Vehicle</th><th></th>
+                    <th>Name</th><th>PNR</th><th>Ticket</th><th>Pax</th><th>Bags</th><th>Visa</th><th>Payment</th><th>Vehicle</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -536,6 +555,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                       <td>{p.pax_count}</td>
                       <td>{p.bags_count ?? '—'}</td>
                       <td>{visaBadge(p.visa_status)}</td>
+                      <td>{paymentBadge(p.payment_status)}</td>
                       <td style={{ fontSize: 12, color: p.car_vehicle_type ? 'var(--green-300)' : 'var(--text-dim)' }}>
                         {p.car_vehicle_type || 'Unassigned'}
                       </td>
@@ -548,6 +568,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                                 name: p.name || '', pnr: p.pnr || '', ticket_number: p.ticket_number || '',
                                 pax_count: p.pax_count || 1, bags_count: p.bags_count ?? '',
                                 visa_status: p.visa_status || 'NOT_APPLIED',
+                                payment_status: p.payment_status || 'AWAITING_FINAL_COST',
                                 car_slot_id: p.car_slot_id || ''
                               });
                               setShowPaxForm(true);
@@ -573,7 +594,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th><th>PNR</th><th>Pax Count</th><th>Bags</th><th>Visa</th><th>Assigned Vehicle</th>
+                  <th>Name</th><th>PNR</th><th>Pax Count</th><th>Bags</th><th>Visa</th><th>Payment</th><th>Assigned Vehicle</th>
                 </tr>
               </thead>
               <tbody>
@@ -584,6 +605,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
                     <td>{p.pax_count}</td>
                     <td>{p.bags_count ?? '—'}</td>
                     <td>{visaBadge(p.visa_status)}</td>
+                    <td>{paymentBadge(p.payment_status)}</td>
                     <td style={{ fontSize: 12, color: p.car_vehicle_type ? 'var(--green-300)' : 'var(--text-dim)' }}>
                       {p.car_vehicle_type || 'Unassigned'}
                     </td>

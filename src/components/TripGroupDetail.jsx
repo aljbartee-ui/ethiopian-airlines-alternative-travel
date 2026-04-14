@@ -135,7 +135,9 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
       };
       delete payload.pricing_mode;
       if (editingSlot) {
-        await api(`/api/car-slots/${editingSlot.id}`, { method: 'PUT', body: JSON.stringify({ ...payload, status: editingSlot.status || 'OPEN' }) });
+        // Do NOT send status — the server auto-computes it based on new total_seats vs booked pax.
+        // This ensures that increasing seats on a FULL vehicle automatically re-opens it.
+        await api(`/api/car-slots/${editingSlot.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       } else {
         await api(`/api/trip-groups/${tripGroup.id}/car-slots`, { method: 'POST', body: JSON.stringify(payload) });
       }
@@ -155,6 +157,7 @@ export function TripGroupDetail({ role, tripGroup, onClose, onUpdated }) {
   }
 
   async function handleSlotStatusToggle(slot) {
+    if (slot.status === 'COMPLETED' || slot.status === 'CANCELLED') return;
     const newStatus = slot.status === 'FULL' ? 'OPEN' : 'FULL';
     await api(`/api/car-slots/${slot.id}`, {
       method: 'PUT',

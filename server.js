@@ -386,28 +386,65 @@ app.put('/api/car-slots/:id', requireRole('ALSAWAN'), async (req, res) => {
     pickup_location_url, pickup_time, departure_time,
     service_date, transit_city, status, alsawan_note
   } = req.body;
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    // Get current booked pax count so we can auto-compute the correct status
+    const bookedRes = await client.query(
+      `SELECT COALESCE(SUM(p.pax_count), 0) AS booked_pax,
+              cs.status AS current_status
+       FROM car_slots cs
+       LEFT JOIN passengers p ON p.car_slot_id = cs.id
+       WHERE cs.id = $1
+       GROUP BY cs.id`,
+      [id]
+    );
+    const bookedPax   = Number(bookedRes.rows[0]?.booked_pax  || 0);
+    const currentStatus = bookedRes.rows[0]?.current_status || 'OPEN';
+    const newSeats    = Number(total_seats);
+
+    // Auto-compute status:
+    //  - If COMPLETED or CANCELLED, keep it (only explicit toggle can change those)
+    //  - If new seats > booked pax  → OPEN  (capacity was expanded, re-open)
+    //  - If new seats <= booked pax → FULL  (still at or over capacity)
+    //  - Otherwise respect the client-sent status (e.g. manual Mark Full)
+    let resolvedStatus;
+    if (currentStatus === 'COMPLETED' || currentStatus === 'CANCELLED') {
+      resolvedStatus = currentStatus;
+    } else if (newSeats > bookedPax) {
+      resolvedStatus = 'OPEN';
+    } else if (newSeats <= bookedPax) {
+      resolvedStatus = 'FULL';
+    } else {
+      resolvedStatus = status || 'OPEN';
+    }
+
+    const result = await client.query(
       `UPDATE car_slots SET
         vehicle_type=$1, total_seats=$2, bag_limit_per_pax=$3, bag_limit_note=$4,
         per_pax_cost_kwd=$5, total_vehicle_price_kwd=$6,
         pickup_location_url=$7, pickup_time=$8, departure_time=$9,
         service_date=$10, transit_city=$11, status=$12, alsawan_note=$13, updated_at=NOW()
        WHERE id=$14 RETURNING *`,
-      [vehicle_type, total_seats,
+      [vehicle_type, newSeats,
        bag_limit_per_pax || null, bag_limit_note || null,
        per_pax_cost_kwd || null, total_vehicle_price_kwd || null,
        pickup_location_url || null,
        pickup_time || null, departure_time || null,
        service_date || null, transit_city || null,
-       status || 'OPEN', alsawan_note || null, id]
+       resolvedStatus, alsawan_note || null, id]
     );
+    await client.query('COMMIT');
     const slotRow = result.rows[0];
     broadcastUpdate('car-slots-changed', { trip_group_id: slotRow.trip_group_id, slot_id: Number(id), action: 'updated' });
     res.json(slotRow);
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Failed to update car slot: ' + err.message });
+  } finally {
+    client.release();
   }
 });
 

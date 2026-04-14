@@ -176,7 +176,9 @@ export function AlsawanDashboard() {
       };
       delete body.pricing_mode;
       if (editCar) {
-        await api(`/api/car-slots/${editCar.id}`, { method:'PUT', body: JSON.stringify({ ...body, status: editCar.status || 'OPEN' }) });
+        // Do NOT send status — the server auto-computes it based on new total_seats vs booked pax.
+        // This ensures that increasing seats on a FULL vehicle automatically re-opens it.
+        await api(`/api/car-slots/${editCar.id}`, { method:'PUT', body: JSON.stringify(body) });
       } else if (body.trip_group_id) {
         await api(`/api/trip-groups/${body.trip_group_id}/car-slots`, { method:'POST', body: JSON.stringify(body) });
       } else {
@@ -189,6 +191,7 @@ export function AlsawanDashboard() {
   };
 
   const handleSlotStatusToggle = async slot => {
+    if (slot.status === 'COMPLETED' || slot.status === 'CANCELLED') return;
     const newStatus = slot.status === 'FULL' ? 'OPEN' : 'FULL';
     await api(`/api/car-slots/${slot.id}`, { method:'PUT', body: JSON.stringify({ ...slot, status: newStatus }) });
     await loadSlots();

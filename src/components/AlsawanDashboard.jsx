@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useSSE } from '../useSSE';
+import { DailySummary } from './DailySummary';
 import { TripGroupDetail } from './TripGroupDetail';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -421,10 +422,17 @@ export function AlsawanDashboard() {
       </div>
 
       {/* Tabs */}
-      <div style={{display:'flex',gap:8,marginBottom:4}}>
+      <div style={{display:'flex',gap:8,marginBottom:4,flexWrap:'wrap'}}>
         <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => setTab('groups')}>📋 ET Trip Requests</button>
         <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => setTab('vehicles')}>
           🚌 All My Vehicles {standaloneSlots.length > 0 && <span className="badge badge-open" style={{marginLeft:6}}>{standaloneSlots.length} standalone</span>}
+        </button>
+        <button
+          className={`button${tab==='daily'?'':' ghost'}`}
+          onClick={() => setTab('daily')}
+          style={tab !== 'daily' ? {border:'1px solid rgba(245,166,35,0.35)',color:'var(--et-gold-neon)'} : {}}
+        >
+          📅 Daily Summary
         </button>
       </div>
 
@@ -690,6 +698,9 @@ export function AlsawanDashboard() {
           )}
         </div>
       )}
+
+      {/* ── Tab: Daily Summary ───────────────────────────────────────── */}
+      {tab === 'daily' && <DailySummary role="ALSAWAN" />}
 
       {/* Trip Group Detail modal */}
       {selected && (

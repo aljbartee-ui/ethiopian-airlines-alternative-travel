@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { useSSE } from '../useSSE';
 import { TripGroupDetail } from './TripGroupDetail';
+import { DailySummary } from './DailySummary';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 const fmtDate = iso => {
@@ -299,11 +300,18 @@ export function EtDashboard() {
       </div>
 
       {/* Tabs */}
-      <div style={{display:'flex',gap:8,marginBottom:4}}>
+      <div style={{display:'flex',gap:8,marginBottom:4,flexWrap:'wrap'}}>
         <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => setTab('groups')}>✈ My Trip Groups</button>
         <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => setTab('vehicles')}>
           🚌 Available Vehicles
           {openSlots.length > 0 && <span className="badge badge-open" style={{marginLeft:6}}>{openSlots.length} open</span>}
+        </button>
+        <button
+          className={`button${tab==='daily'?'':' ghost'}`}
+          onClick={() => setTab('daily')}
+          style={tab !== 'daily' ? {border:'1px solid rgba(245,166,35,0.35)',color:'var(--et-gold-neon)'} : {}}
+        >
+          📅 Daily Summary
         </button>
       </div>
 
@@ -813,6 +821,9 @@ export function EtDashboard() {
           )}
         </div>
       )}
+
+      {/* ── Tab: Daily Summary ───────────────────────────────────────── */}
+      {tab === 'daily' && <DailySummary role="ET" />}
 
       {/* Trip Group Detail modal */}
       {selected && (

@@ -601,9 +601,9 @@ export function DailySummary({ role }) {
     setSseStatus
   );
 
-  // ── Filter groups by transit_date ──────────────────────────────────────────
-  const todayGroups    = allGroups.filter(g => g.transit_date?.slice(0,10) === todayStr);
-  const tomorrowGroups = allGroups.filter(g => g.transit_date?.slice(0,10) === tomorrowStr);
+  // ── Filter groups by checkin_date (the day passengers actually board the bus) ─
+  const todayGroups    = allGroups.filter(g => g.checkin_date?.slice(0,10) === todayStr);
+  const tomorrowGroups = allGroups.filter(g => g.checkin_date?.slice(0,10) === tomorrowStr);
 
   // Groups with no vehicle assigned
   const todayNoVehicle    = todayGroups.filter(g => Number(g.car_slot_count || 0) === 0);
@@ -652,7 +652,7 @@ export function DailySummary({ role }) {
         <div className="stats-row">
           <div className="stat-card">
             <div className="stat-value" style={{color:'var(--et-green-neon)',textShadow:'var(--glow-green)'}}>{todayGroups.length}</div>
-            <div className="stat-label">Today's Groups</div>
+            <div className="stat-label">Today's Check-ins</div>
           </div>
           <div className="stat-card">
             <div className="stat-value" style={{color:'var(--et-green-neon)',textShadow:'var(--glow-green)'}}>{totalPaxToday}</div>
@@ -660,7 +660,7 @@ export function DailySummary({ role }) {
           </div>
           <div className="stat-card">
             <div className="stat-value" style={{color:'var(--et-gold-neon)',textShadow:'var(--glow-gold)'}}>{tomorrowGroups.length}</div>
-            <div className="stat-label">Tomorrow's Groups</div>
+            <div className="stat-label">Tomorrow's Check-ins</div>
           </div>
           <div className="stat-card">
             <div className="stat-value" style={{color:'var(--et-gold-neon)',textShadow:'var(--glow-gold)'}}>{totalPaxTomorrow}</div>
@@ -708,7 +708,7 @@ export function DailySummary({ role }) {
       {todayGroups.length === 0 ? (
         <div className="empty-state" style={{padding:'20px 24px',marginBottom:18}}>
           <div className="empty-state-icon">✈</div>
-          <div style={{fontWeight:600,marginBottom:4}}>No ET trip groups for today</div>
+          <div style={{fontWeight:600,marginBottom:4}}>No ET trip groups checking in today</div>
         </div>
       ) : (
         <div style={{marginBottom:18}}>
@@ -751,7 +751,7 @@ export function DailySummary({ role }) {
       {tomorrowGroups.length === 0 ? (
         <div className="empty-state" style={{padding:'20px 24px',marginBottom:18}}>
           <div className="empty-state-icon">✈</div>
-          <div style={{fontWeight:600,marginBottom:4}}>No ET trip groups for tomorrow</div>
+          <div style={{fontWeight:600,marginBottom:4}}>No ET trip groups checking in tomorrow</div>
         </div>
       ) : (
         <div style={{marginBottom:18}}>
@@ -794,8 +794,8 @@ export function DailySummary({ role }) {
             <div style={{fontWeight:600,marginBottom:6}}>Nothing scheduled for today or tomorrow</div>
             <div style={{fontSize:12}}>
               {role === 'ALSAWAN'
-                ? 'ET trip groups and vehicles with today/tomorrow dates will appear here'
-                : 'Your trip groups and Alsawan vehicles for today/tomorrow will appear here'}
+                ? 'ET trip groups with a check-in date and vehicles with a service date for today/tomorrow will appear here'
+                : 'Your trip groups with a check-in date and Alsawan vehicles for today/tomorrow will appear here'}
             </div>
           </div>
         </div>

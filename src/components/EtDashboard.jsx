@@ -301,14 +301,14 @@ export function EtDashboard() {
 
       {/* Tabs */}
       <div style={{display:'flex',gap:8,marginBottom:4,flexWrap:'wrap'}}>
-        <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => setTab('groups')}>✈ My Trip Groups</button>
-        <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => setTab('vehicles')}>
+        <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => { setTab('groups'); setSelected(null); setSelSlot(null); setShowPaxForm(false); setEditingPax(null); }}>✈ My Trip Groups</button>
+        <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => { setTab('vehicles'); setSelected(null); setSelSlot(null); setShowPaxForm(false); setEditingPax(null); }}>
           🚌 Available Vehicles
           {openSlots.length > 0 && <span className="badge badge-open" style={{marginLeft:6}}>{openSlots.length} open</span>}
         </button>
         <button
           className={`button${tab==='daily'?'':' ghost'}`}
-          onClick={() => setTab('daily')}
+          onClick={() => { setTab('daily'); setSelected(null); setSelSlot(null); setShowPaxForm(false); setEditingPax(null); }}
           style={tab !== 'daily' ? {border:'1px solid rgba(245,166,35,0.35)',color:'var(--et-gold-neon)'} : {}}
         >
           📅 Daily Summary

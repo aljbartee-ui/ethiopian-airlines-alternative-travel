@@ -423,13 +423,13 @@ export function AlsawanDashboard() {
 
       {/* Tabs */}
       <div style={{display:'flex',gap:8,marginBottom:4,flexWrap:'wrap'}}>
-        <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => setTab('groups')}>📋 ET Trip Requests</button>
-        <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => setTab('vehicles')}>
+        <button className={`button${tab==='groups'?'':' ghost'}`} onClick={() => { setTab('groups'); setSelected(null); setSelSlot(null); setShowCarForm(false); setEditCar(null); setShowPaxForm(false); }}>📋 ET Trip Requests</button>
+        <button className={`button${tab==='vehicles'?'':' ghost'}`} onClick={() => { setTab('vehicles'); setSelected(null); setSelSlot(null); setShowCarForm(false); setEditCar(null); setShowPaxForm(false); }}>
           🚌 All My Vehicles {standaloneSlots.length > 0 && <span className="badge badge-open" style={{marginLeft:6}}>{standaloneSlots.length} standalone</span>}
         </button>
         <button
           className={`button${tab==='daily'?'':' ghost'}`}
-          onClick={() => setTab('daily')}
+          onClick={() => { setTab('daily'); setSelected(null); setSelSlot(null); setShowCarForm(false); setEditCar(null); setShowPaxForm(false); }}
           style={tab !== 'daily' ? {border:'1px solid rgba(245,166,35,0.35)',color:'var(--et-gold-neon)'} : {}}
         >
           📅 Daily Summary

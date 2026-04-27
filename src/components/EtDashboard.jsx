@@ -451,7 +451,7 @@ export function EtDashboard() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Date</th><th>City</th><th>Dir</th><th>Flight</th>
+                    <th>#</th><th>Date</th><th>City</th><th>Dir</th><th>Flight</th>
                     <th>Destination</th><th>Check-in</th>
                     <th>Req Pax</th><th>Booked</th><th>Vehicles</th><th>Status</th><th>Actions</th>
                   </tr>
@@ -459,6 +459,11 @@ export function EtDashboard() {
                 <tbody>
                   {tripGroups.map(g => (
                     <tr key={g.id} style={{cursor:'pointer'}} onClick={() => setSelected(selected?.id===g.id ? null : g)}>
+                      <td>
+                        <span style={{fontFamily:'monospace',fontWeight:800,fontSize:13,color:'var(--et-green-neon)',textShadow:'var(--glow-green)',background:'rgba(0,107,63,0.15)',border:'1px solid rgba(0,255,140,0.25)',borderRadius:4,padding:'2px 7px',whiteSpace:'nowrap'}}>
+                          #{g.id}
+                        </span>
+                      </td>
                       <td style={{whiteSpace:'nowrap',fontWeight:500}}>{fmtDate(g.transit_date)}</td>
                       <td><strong style={{color:'var(--text-main)'}}>{g.transit_city}</strong></td>
                       <td>

@@ -450,7 +450,7 @@ export function AlsawanDashboard() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Date</th><th>City</th><th>Dir</th><th>Flight</th>
+                    <th>#</th><th>Date</th><th>City</th><th>Dir</th><th>Flight</th>
                     <th>Req Pax</th><th>Booked</th><th>Bags</th>
                     <th>Vehicles</th><th>Fill</th><th>Status</th><th>Actions</th>
                   </tr>
@@ -463,6 +463,11 @@ export function AlsawanDashboard() {
                     const barClass   = fillPct >= 90 ? 'high' : fillPct >= 60 ? 'medium' : 'low';
                     return (
                       <tr key={g.id} style={{cursor:'pointer'}} onClick={() => setSelected(selected?.id===g.id ? null : g)}>
+                        <td>
+                          <span style={{fontFamily:'monospace',fontWeight:800,fontSize:13,color:'var(--et-green-neon)',textShadow:'var(--glow-green)',background:'rgba(0,107,63,0.15)',border:'1px solid rgba(0,255,140,0.25)',borderRadius:4,padding:'2px 7px',whiteSpace:'nowrap'}}>
+                            #{g.id}
+                          </span>
+                        </td>
                         <td style={{whiteSpace:'nowrap',fontWeight:500}}>{fmtDate(g.transit_date)}</td>
                         <td><strong style={{color:'var(--text-main)'}}>{g.transit_city}</strong></td>
                         <td>

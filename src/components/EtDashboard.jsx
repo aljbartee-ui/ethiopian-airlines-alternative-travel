@@ -269,7 +269,7 @@ export function EtDashboard() {
   };
 
   /* ── derived ──────────────────────────────────────────────────────────── */
-  const standaloneSlots = allSlots.filter(s => !s.trip_group_id);
+  const standaloneSlots = allSlots; // all vehicles — standalone + trip-group-linked
   const openSlots       = standaloneSlots.filter(s => s.status === 'OPEN' || s.status === 'COLLECTING');
 
   return (
@@ -498,15 +498,15 @@ export function EtDashboard() {
           <div className="section-header" style={{marginBottom:14}}>
             <div>
               <div className="card-title">🚌 Available Vehicles from Alsawan</div>
-              <div className="card-subtitle">Standalone vehicles posted by Alsawan — click to manage passengers</div>
+              <div className="card-subtitle">All vehicles posted by Alsawan (standalone &amp; trip-group) — click to manage passengers</div>
             </div>
           </div>
 
           {standaloneSlots.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">🚌</div>
-              <div style={{fontWeight:600,marginBottom:6}}>No standalone vehicles available yet</div>
-              <div style={{fontSize:12}}>Alsawan will post available vehicles here</div>
+              <div style={{fontWeight:600,marginBottom:6}}>No vehicles available yet</div>
+              <div style={{fontSize:12}}>Alsawan will post standalone and trip-group vehicles here</div>
             </div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -548,6 +548,11 @@ export function EtDashboard() {
                           )}
                           {slot.service_date && (
                             <span style={{fontSize:12,color:'var(--text-muted)'}}>📅 {fmtDate(slot.service_date)}</span>
+                          )}
+                          {slot.trip_group_id && (
+                            <span style={{fontSize:11,background:'rgba(0,107,63,0.15)',border:'1px solid rgba(0,255,140,0.25)',borderRadius:4,padding:'2px 8px',color:'var(--et-green-neon)',fontWeight:600}}>
+                              ✈ Group #{slot.trip_group_id}
+                            </span>
                           )}
                         {slot.total_vehicle_price_kwd && (() => {
                             const perPax = booked > 0 ? (Number(slot.total_vehicle_price_kwd) / booked).toFixed(3) : null;
